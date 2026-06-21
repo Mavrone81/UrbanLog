@@ -652,8 +652,8 @@ body {
     gap: 0.85rem;
 }
 
-.chat-launcher { background-color: var(--primary); }
-.chat-launcher:hover { background-color: var(--primary-dark); }
+.chat-launcher { background-color: #0d2740; }
+.chat-launcher:hover { background-color: #081a2c; }
 
 .chat-panel[hidden] { display: none; }
 
@@ -671,7 +671,7 @@ body {
 }
 
 .chat-header {
-    background: var(--primary);
+    background: #0d2740;
     color: var(--white);
     padding: 0.9rem 1rem;
     display: flex;
