@@ -141,7 +141,9 @@ function clientIp(req) {
 }
 
 // ---- IP geolocation (city-level, approximate) ----
+function normalizeIp(ip) { return String(ip || "").replace(/^::ffff:/i, ""); }
 function isPrivateIp(ip) {
+  ip = normalizeIp(ip);
   if (!ip || ip === "unknown") return true;
   if (ip === "::1" || ip.startsWith("fe80") || ip.startsWith("fc") || ip.startsWith("fd")) return true;
   if (ip.startsWith("127.") || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("169.254.")) return true;
@@ -151,7 +153,7 @@ function isPrivateIp(ip) {
 }
 async function geoLookup(ip) {
   // ip-api.com free endpoint (HTTP, non-commercial, ~45 req/min). Swap to a paid provider for commercial/HTTPS use.
-  const url = `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,zip,lat,lon,isp`;
+  const url = `http://ip-api.com/json/${encodeURIComponent(normalizeIp(ip))}?fields=status,country,countryCode,regionName,city,zip,lat,lon,isp`;
   const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
   const d = await r.json();
   if (d.status !== "success") return { status: "failed" };
@@ -192,7 +194,20 @@ function recordVisit(req) {
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
-app.use(cookieSession({ name: "uwsess", keys: [SESSION_SECRET], maxAge: 8 * 60 * 60 * 1000, httpOnly: true, sameSite: "lax" }));
+app.use(cookieSession({ name: "uwsess", keys: [SESSION_SECRET], maxAge: 8 * 60 * 60 * 1000, httpOnly: true, sameSite: "lax", secure: true }));
+
+// Simple per-IP throttles (brute-force / spam protection).
+function makeThrottle(windowMs, max) {
+  const hits = new Map();
+  setInterval(() => { const n = Date.now(); for (const [k, e] of hits) if (n > e.resetAt) hits.delete(k); }, windowMs).unref();
+  return (ip) => {
+    const now = Date.now(), e = hits.get(ip);
+    if (!e || now > e.resetAt) { hits.set(ip, { n: 1, resetAt: now + windowMs }); return false; }
+    e.n += 1; return e.n > max;
+  };
+}
+const loginThrottle = makeThrottle(15 * 60 * 1000, 12); // 12 login attempts / 15 min
+const leadThrottle = makeThrottle(10 * 60 * 1000, 20);  // 20 lead submissions / 10 min
 
 function requireAuth(req, res, next) {
   if (req.session?.user === ADMIN_USER) return next();
@@ -201,6 +216,7 @@ function requireAuth(req, res, next) {
 
 // ---- Auth ----
 app.post("/cms/login", (req, res) => {
+  if (loginThrottle(clientIp(req))) return res.status(429).json({ error: "Too many login attempts. Please try again later." });
   const { username, password } = req.body || {};
   if (username === ADMIN_USER && typeof password === "string" && bcrypt.compareSync(password, ADMIN_HASH)) {
     req.session.user = ADMIN_USER;
@@ -237,6 +253,7 @@ app.get("/cms/logo-file", (_req, res) => {
   res.sendFile(p);
 });
 app.post("/cms/lead", (req, res) => {
+  if (leadThrottle(clientIp(req))) return res.status(429).json({ error: "Too many submissions." });
   const b = req.body || {};
   const lead = {
     id: `lead_${Date.now()}_${Math.floor(Math.random() * 1e6).toString(36)}`,
@@ -289,6 +306,11 @@ app.delete("/cms/leads/:id", requireAuth, (req, res) => {
 });
 
 app.get("/cms/visitors", requireAuth, (_req, res) => {
+  // Lazily geolocate any not-yet-resolved IPs (e.g. logged before geo existed) when the panel is viewed.
+  for (const ip of Object.keys(db.visitors)) {
+    const g = db.visitors[ip].geo;
+    if (!g || (g.status !== "done" && g.status !== "private")) maybeGeolocate(ip);
+  }
   const list = Object.values(db.visitors).sort((a, b) => (a.last < b.last ? 1 : -1));
   res.json({ total: list.length, visitors: list.slice(0, 1000) });
 });
