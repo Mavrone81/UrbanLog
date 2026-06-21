@@ -20,6 +20,35 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "P@55w0rd888";
 const ADMIN_HASH = bcrypt.hashSync(ADMIN_PASSWORD, 10);
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-please";
 
+// CDMS rate card is the single source of truth for pricing. The CMS reads/writes
+// it via the rate-card API using a shared write key; db.pricing is kept only as a
+// local cache/fallback so the admin never hard-breaks if CDMS is unreachable.
+const RATE_CARD_API = (process.env.RATE_CARD_API || "https://app.urbanfleetsg.com/api/rate-card").replace(/\/+$/, "");
+const RATE_CARD_WRITE_KEY = process.env.RATE_CARD_WRITE_KEY || "";
+const RATE_CARD_TIMEOUT_MS = 6000;
+
+// Fetch the CMS-shaped pricing from CDMS. Throws on any failure/timeout.
+async function fetchCdmsPricing() {
+  const r = await fetch(`${RATE_CARD_API}/cms`, {
+    headers: { "x-rate-card-key": RATE_CARD_WRITE_KEY },
+    signal: AbortSignal.timeout(RATE_CARD_TIMEOUT_MS),
+  });
+  if (!r.ok) throw new Error(`CDMS rate-card GET failed: ${r.status}`);
+  return r.json();
+}
+
+// Push CMS-shaped pricing to CDMS. Throws on any failure/timeout.
+async function pushCdmsPricing(pricing) {
+  const r = await fetch(`${RATE_CARD_API}/cms`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "x-rate-card-key": RATE_CARD_WRITE_KEY },
+    body: JSON.stringify(pricing),
+    signal: AbortSignal.timeout(RATE_CARD_TIMEOUT_MS),
+  });
+  if (!r.ok) throw new Error(`CDMS rate-card PUT failed: ${r.status}`);
+  return r.json();
+}
+
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // CDMS rate card (digested from the CDMS Rate Card Dashboard). Reference direct cost is the
@@ -191,7 +220,16 @@ app.get("/cms/site", (req, res) => {
     logoUrl: db.logo.faviconFile ? `/cms/logo-file?v=${encodeURIComponent(db.logo.faviconFile)}` : null,
   });
 });
-app.get("/cms/pricing", (_req, res) => res.json(db.pricing));
+app.get("/cms/pricing", async (_req, res) => {
+  // CDMS is the source of truth; fall back to the local cache on any failure.
+  try {
+    const pricing = await fetchCdmsPricing();
+    db.pricing = normalizePricing(pricing); // refresh local cache
+    return res.json(db.pricing);
+  } catch {
+    return res.json(db.pricing);
+  }
+});
 app.get("/cms/logo-file", (_req, res) => {
   if (!db.logo.faviconFile) return res.status(404).end();
   const p = path.join(UPLOAD_DIR, db.logo.faviconFile);
@@ -223,13 +261,23 @@ app.post("/cms/lead", (req, res) => {
 
 // ---- Admin (auth) ----
 app.get("/cms/content", requireAuth, (_req, res) => res.json({ seo: db.seo, content: db.content, pricing: db.pricing, logoUrl: db.logo.faviconFile ? `/cms/logo-file?v=${encodeURIComponent(db.logo.faviconFile)}` : null }));
-app.put("/cms/content", requireAuth, (req, res) => {
+app.put("/cms/content", requireAuth, async (req, res) => {
   const { seo, content, pricing } = req.body || {};
   if (seo && typeof seo === "object") db.seo = { ...db.seo, ...pick(seo, ["title", "description"]) };
   if (content && typeof content === "object") db.content = { ...db.content, ...pick(content, ["heroTitleTop", "heroTitleBottom", "heroSubtitle", "phone", "whatsapp", "email", "availability"]) };
-  if (pricing && typeof pricing === "object") db.pricing = normalizePricing(pricing);
+  let pricingSync = null;
+  if (pricing && typeof pricing === "object") {
+    db.pricing = normalizePricing(pricing); // keep a local cache/fallback copy
+    // CDMS is the source of truth — push the normalized pricing there.
+    try {
+      await pushCdmsPricing(db.pricing);
+      pricingSync = "ok";
+    } catch (e) {
+      pricingSync = "failed"; // local cache still updated; surface the sync status
+    }
+  }
   saveDB();
-  res.json({ ok: true, seo: db.seo, content: db.content, pricing: db.pricing });
+  res.json({ ok: true, seo: db.seo, content: db.content, pricing: db.pricing, ...(pricingSync ? { pricingSync } : {}) });
 });
 
 app.get("/cms/leads", requireAuth, (_req, res) => res.json({ leads: db.leads }));
