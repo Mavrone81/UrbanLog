@@ -252,6 +252,28 @@
         </footer>
     </main>
 
+    <!-- Chat widget (bottom-left) -->
+    <div class="chat-widget">
+        <div class="chat-panel" id="chatPanel" hidden>
+            <div class="chat-header">
+                <div class="chat-header-info">
+                    <span class="chat-title">Urban Werkz Assistant</span>
+                    <span class="chat-status">Ask us anything</span>
+                </div>
+                <button class="chat-close" id="chatClose" aria-label="Close chat"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+            <form class="chat-input" id="chatForm">
+                <input type="text" id="chatText" autocomplete="off" placeholder="Type your message…"
+                       aria-label="Type your message" maxlength="1000" required>
+                <button type="submit" id="chatSend" aria-label="Send"><i class="ph ph-paper-plane-right"></i></button>
+            </form>
+        </div>
+        <button class="fab chat-launcher" id="chatLauncher" aria-label="Chat with us" title="Chat with us">
+            <i class="ph ph-chat-circle-dots"></i>
+        </button>
+    </div>
+
     <!-- Floating action buttons -->
     <div class="floating-actions">
         <button id="backToTop" class="fab fab-top" aria-label="Back to top" title="Back to top">
@@ -279,5 +301,6 @@
     </div>
 
     <script src="js/main.js"></script>
+    <script src="js/chat.js"></script>
 </body>
 </html>

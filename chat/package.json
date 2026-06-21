@@ -1,0 +1,15 @@
+{
+  "name": "urbanlog-chat",
+  "version": "1.0.0",
+  "description": "Server-side Claude proxy for the Urban Werkz Delivery website chatbot",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "express": "^4.21.0"
+  }
+}

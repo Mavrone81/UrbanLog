@@ -90,6 +90,45 @@ test.describe('Floating action buttons', () => {
   });
 });
 
+test.describe('Chat widget', () => {
+  test('panel is hidden until the launcher is clicked, then shows a greeting', async ({ page }) => {
+    await page.goto('/');
+    const panel = page.locator('#chatPanel');
+    await expect(panel).toBeHidden();
+    await page.locator('#chatLauncher').click();
+    await expect(panel).toBeVisible();
+    await expect(page.locator('.chat-msg.bot').first()).toContainText(/Urban Werkz assistant/i);
+    await page.locator('#chatClose').click();
+    await expect(panel).toBeHidden();
+  });
+
+  test('sending a message posts to /api/chat and renders the reply', async ({ page }) => {
+    // The static test server has no backend, so stub the proxy endpoint.
+    await page.route('**/api/chat', (route) =>
+      route.fulfill({ json: { reply: 'We deliver same-day across Singapore!' } }));
+    await page.goto('/');
+    await page.locator('#chatLauncher').click();
+    await page.locator('#chatText').fill('Do you do same-day?');
+    await page.locator('#chatSend').click();
+    await expect(page.locator('.chat-msg.user').last()).toHaveText('Do you do same-day?');
+    await expect(page.locator('.chat-msg.bot').last()).toContainText('same-day across Singapore');
+  });
+
+  test('renders a WhatsApp booking hand-off button when the bot confirms a booking', async ({ page }) => {
+    const waUrl = `https://wa.me/${WA}?text=${encodeURIComponent('Hi Urban Werkz, I\'d like to book a delivery:')}`;
+    await page.route('**/api/chat', (route) =>
+      route.fulfill({ json: { reply: 'Your booking summary is ready!', whatsappUrl: waUrl } }));
+    await page.goto('/');
+    await page.locator('#chatLauncher').click();
+    await page.locator('#chatText').fill('Yes, book it');
+    await page.locator('#chatSend').click();
+    const cta = page.locator('.chat-cta');
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute('href', new RegExp(`wa\\.me/${WA}`));
+    await expect(cta).toHaveAttribute('target', '_blank');
+  });
+});
+
 test.describe('Scroll-reveal animation', () => {
   test('off-screen .target-observe elements become visible after scrolling into view', async ({ page }) => {
     await page.goto('/');

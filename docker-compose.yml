@@ -9,3 +9,16 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:20031:80"
+
+  # Server-side Claude proxy for the chatbot. The host nginx reverse-proxies
+  # urbanfleetsg.com/api/ -> 127.0.0.1:20032. The API key comes from .env
+  # (server-managed, git-ignored) — never baked into the image.
+  chat:
+    build: ./chat
+    image: urbanlog-chat
+    container_name: urbanlog-chat
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:20032:3000"

@@ -88,6 +88,16 @@ describe('link & asset integrity (parsed from index.html)', () => {
     expect(html).toMatch(/href="mailto:Urbanfleet@gmail\.com/i);
   });
 
+  it('wires up the chat widget and its script', () => {
+    expect(html).toMatch(/id="chatLauncher"/);
+    expect(html).toMatch(/<script[^>]*src="js\/chat\.js"/);
+    expect(fs.existsSync(path.join(ROOT, 'js/chat.js'))).toBe(true);
+    // The chatbot must talk to the server proxy, never embed an API key in the client.
+    const chatJs = fs.readFileSync(path.join(ROOT, 'js/chat.js'), 'utf8');
+    expect(chatJs).toMatch(/\/api\/chat/);
+    expect(chatJs).not.toMatch(/sk-ant-/);
+  });
+
   it('references the favicon assets', () => {
     expect(html).toMatch(/rel="icon"[^>]*href="favicon\.png"/);
     expect(fs.existsSync(path.join(ROOT, 'favicon.png'))).toBe(true);
