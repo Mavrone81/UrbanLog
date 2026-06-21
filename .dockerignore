@@ -1,0 +1,10 @@
+# Keep the image to just the static site — no VCS, tooling, or deploy meta in the web root
+.git
+.gitignore
+.dockerignore
+.claude
+.DS_Store
+Dockerfile
+docker-compose.yml
+*.md
+node_modules

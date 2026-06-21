@@ -1,0 +1,15 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# Local tooling (not part of the deployable site)
+.claude/
+
+# Secrets / server-managed state (never commit real values)
+.env
+.env.*
+!.env.example
+
+# Logs & caches
+*.log
+node_modules/
