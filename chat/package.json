@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "pdfkit": "^0.15.0"
   }
 }

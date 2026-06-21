@@ -1,0 +1,11 @@
+# UrbanLog (Urban Werkz Delivery) — static site container.
+# Published only on loopback; the host nginx reverse-proxies urbanfleetsg.com -> 127.0.0.1:20031.
+# Named distinctly so it never collides with the unrelated `urbanwerkz` app on the same host.
+services:
+  app:
+    build: .
+    image: urbanlog-app
+    container_name: urbanlog-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:20031:80"

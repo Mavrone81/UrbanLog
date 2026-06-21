@@ -39,15 +39,28 @@
         return el;
     }
 
-    // Prominent WhatsApp hand-off button (booking confirmation).
-    function addWhatsAppCta(url) {
+    // Prominent WhatsApp button (booking confirmation or human hand-off).
+    function addWhatsAppCta(url, label) {
         if (!/^https:\/\/wa\.me\//.test(url || '')) return;
         const a = document.createElement('a');
         a.className = 'chat-cta';
         a.href = url;
         a.target = '_blank';
         a.rel = 'noopener';
-        a.innerHTML = '<i class="ph ph-whatsapp-logo"></i> Send booking to WhatsApp';
+        a.innerHTML = '<i class="ph ph-whatsapp-logo"></i> ' + (label || 'Chat on WhatsApp');
+        messagesEl.appendChild(a);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // Download-quotation (PDF) button.
+    function addPdfCta(url) {
+        if (typeof url !== 'string' || !url) return;
+        const a = document.createElement('a');
+        a.className = 'chat-cta pdf';
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.innerHTML = '<i class="ph ph-file-pdf"></i> Download quotation (PDF)';
         messagesEl.appendChild(a);
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -92,7 +105,8 @@
             } else {
                 addMessage('bot', data.reply);
                 history.push({ role: 'assistant', content: data.reply });
-                if (data.whatsappUrl) addWhatsAppCta(data.whatsappUrl);
+                if (data.whatsappUrl) addWhatsAppCta(data.whatsappUrl, data.whatsappLabel);
+                if (data.quote && data.quote.pdfUrl) addPdfCta(data.quote.pdfUrl);
             }
         } catch (err) {
             typing.remove();

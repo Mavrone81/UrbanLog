@@ -114,6 +114,31 @@ test.describe('Chat widget', () => {
     await expect(page.locator('.chat-msg.bot').last()).toContainText('same-day across Singapore');
   });
 
+  test('shows a "Chat with our team" WhatsApp button on human hand-off', async ({ page }) => {
+    await page.route('**/api/chat', (route) =>
+      route.fulfill({ json: { reply: "I'll connect you to our team.", whatsappUrl: `https://wa.me/${WA}?text=hi`, whatsappLabel: 'Chat with our team on WhatsApp' } }));
+    await page.goto('/');
+    await page.locator('#chatLauncher').click();
+    await page.locator('#chatText').fill('I have a complaint');
+    await page.locator('#chatSend').click();
+    const cta = page.locator('.chat-cta');
+    await expect(cta).toContainText('Chat with our team on WhatsApp');
+    await expect(cta).toHaveAttribute('href', new RegExp(`wa\\.me/${WA}`));
+  });
+
+  test('shows a Download quotation (PDF) button when the bot quotes', async ({ page }) => {
+    await page.route('**/api/chat', (route) =>
+      route.fulfill({ json: { reply: 'That is SGD 23.53 incl. GST.', quote: { id: 'q_1', total: 23.53, currency: 'SGD', pdfUrl: '/api/quote/q_1.pdf' } } }));
+    await page.goto('/');
+    await page.locator('#chatLauncher').click();
+    await page.locator('#chatText').fill('quote please');
+    await page.locator('#chatSend').click();
+    const pdf = page.locator('.chat-cta.pdf');
+    await expect(pdf).toBeVisible();
+    await expect(pdf).toContainText('Download quotation (PDF)');
+    await expect(pdf).toHaveAttribute('href', '/api/quote/q_1.pdf');
+  });
+
   test('renders a WhatsApp booking hand-off button when the bot confirms a booking', async ({ page }) => {
     const waUrl = `https://wa.me/${WA}?text=${encodeURIComponent('Hi Urban Werkz, I\'d like to book a delivery:')}`;
     await page.route('**/api/chat', (route) =>

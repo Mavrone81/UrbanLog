@@ -3,7 +3,6 @@
 // The key is never sent to the browser and never committed to git.
 import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import PDFDocument from "pdfkit";
 
 const PORT = process.env.PORT || 3000;
 const MODEL = process.env.CHAT_MODEL || "claude-opus-4-8";
@@ -84,39 +83,20 @@ function computeQuote(p, tierKey, distanceKm, kg, surchargeKeys = []) {
   const weight = Math.max(0.1, Number(kg) || 0.1);
   const operational = Number(p.refCost) * zone.m * tier.cm;
   const costToServe = operational + weightSurcharge(p, weight);
-  const deliveryCharge = costToServe * (1 + tier.mg); // net before fuel = base service price incl. margin
-  const fuel = deliveryCharge * (Number(p.fuel) / 100);
-  const net = deliveryCharge + fuel;
+  let net = costToServe * (1 + tier.mg);
+  net += net * (Number(p.fuel) / 100); // fuel surcharge
   let addOn = 0;
-  const addOns = [];
+  const addLines = [];
   for (const k of surchargeKeys || []) {
     const sc = (p.surcharges || []).find((s) => s.k === k);
     if (!sc) continue;
     const amt = sc.type === "pctNet" ? net * (Number(sc.v) / 100) : Number(sc.v);
-    if (amt > 0) { addOn += amt; addOns.push({ label: sc.label, amt: round2(amt) }); }
+    if (amt > 0) { addOn += amt; addLines.push(`${sc.label} ${p.currency} ${round2(amt)}`); }
   }
   const subtotal = net + addOn;
   const gst = subtotal * (Number(p.gst) / 100);
   const total = subtotal + gst;
-  return {
-    currency: p.currency || "SGD", gstRate: Number(p.gst),
-    service: tier.name, sla: tier.sla, zone: zone.name, zoneDesc: zone.desc || "", km, kg: weight,
-    deliveryCharge: round2(deliveryCharge), fuel: round2(fuel), addOns,
-    subtotal: round2(subtotal), gst: round2(gst), total: round2(total),
-  };
-}
-
-// Generated quotations kept briefly so the customer can download the PDF.
-const quotes = new Map();
-setInterval(() => {
-  const cutoff = Date.now() - 60 * 60 * 1000; // 1h TTL
-  for (const [id, q] of quotes) if (q._at < cutoff) quotes.delete(id);
-}, 10 * 60 * 1000).unref();
-function storeQuote(q) {
-  const id = `q_${Date.now()}_${Math.floor(Math.random() * 1e6).toString(36)}`;
-  quotes.set(id, { ...q, _at: Date.now(), number: "UF-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + Math.floor(1000 + Math.random() * 9000) });
-  if (quotes.size > 2000) quotes.delete(quotes.keys().next().value);
-  return id;
+  return { currency: p.currency || "SGD", tier, zone, km, kg: weight, addLines, subtotal: round2(subtotal), gst: round2(gst), total: round2(total) };
 }
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -144,9 +124,8 @@ distance in km (you know Singapore: e.g. Toa Payoh to Ang Mo Kio ≈ 6 km), whic
 weight in kg (ask, or estimate — a small box ≈ 2 kg, docs ≈ 0.5 kg). Ask only for what's missing, 1–2 questions \
 at a time. Mention relevant add-ons if the customer raises them (after-hours/weekend, fragile, cash-on-delivery, \
 extra stop, proof-of-delivery photo). Then call calculate_quote and quote the EXACT total it returns (e.g. \
-"SGD 18.50, incl. GST"), with the service SLA. A PDF quotation is generated automatically — tell the customer \
-they can download it using the button below your message. Add that re-weighing or zone changes at pickup may \
-adjust the final charge. Never invent a price without calling the tool.
+"SGD 18.50, incl. GST"), with the service SLA. Add that re-weighing or zone changes at pickup may adjust the \
+final charge. Never invent a price without calling the tool.
 
 BOOKINGS: After quoting (or whenever the user wants to proceed), gather pickup, drop-off, item, and preferred \
 time (and their name if offered). When the user CONFIRMS, call create_whatsapp_booking with the details — this \
@@ -154,25 +133,10 @@ prepares a WhatsApp message to send to our team to finalise scheduling. Tell the
 Pass through only details the user actually gave.
 
 WHEN YOU CANNOT HELP: For things you genuinely cannot do — live tracking, account/order details, complaints, or \
-anything needing a human — apologise briefly and call the whatsapp_handoff tool. It shows the customer a button \
-to chat with our team on WhatsApp; tell them to tap it. You can also mention phone (+65 8996 8390) or email \
-(Urbanfleet@gmail.com).`;
+anything needing a human — apologise briefly and point the user to WhatsApp +65 8996 8390 \
+(https://wa.me/6589968390), phone (+65 8996 8390), or email (Urbanfleet@gmail.com).`;
 
 const TOOLS = [
-  {
-    name: "whatsapp_handoff",
-    description:
-      "Hand the customer off to a human on WhatsApp. Call this whenever you cannot fully help — live tracking, " +
-      "account/order issues, complaints, special requests, or anything needing a person. It shows the customer a " +
-      "WhatsApp button to chat with our team.",
-    input_schema: {
-      type: "object",
-      properties: {
-        summary: { type: "string", description: "A short summary of what the customer needs, prefilled into the WhatsApp message" },
-      },
-      required: [],
-    },
-  },
   {
     name: "calculate_quote",
     description:
@@ -212,13 +176,6 @@ const TOOLS = [
     },
   },
 ];
-
-function buildHandoffLink(summary) {
-  const text = summary && String(summary).trim()
-    ? `Hi Urban Werkz, I'd like some help: ${String(summary).trim()}`
-    : "Hi Urban Werkz, I'd like to speak to someone about a delivery.";
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
-}
 
 function buildBookingLink(details) {
   const lines = ["Hi Urban Werkz, I'd like to book a delivery:"];
@@ -282,8 +239,8 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
-    let whatsappUrl = null, whatsappLabel = null, quoteInfo = null;
-    // Short agentic loop so the model can call quote/handoff/booking tools, then reply.
+    let whatsappUrl = null;
+    // Short agentic loop so the model can call quote/booking tools, then reply.
     for (let i = 0; i < 4; i++) {
       const response = await client.messages.create({
         model: MODEL,
@@ -302,31 +259,19 @@ app.post("/chat", async (req, res) => {
             const p = await getPricing();
             const inp = block.input || {};
             const q = computeQuote(p, inp.service, inp.distance_km, inp.weight_kg, inp.surcharges || []);
-            const id = storeQuote(q);
-            quoteInfo = { id, total: q.total, currency: q.currency, pdfUrl: `/api/quote/${id}.pdf` };
-            const adds = q.addOns.length ? ` Add-ons: ${q.addOns.map((a) => `${a.label} ${q.currency} ${a.amt}`).join(", ")}.` : "";
+            const adds = q.addLines.length ? ` Add-ons: ${q.addLines.join(", ")}.` : "";
             results.push({
               type: "tool_result",
               tool_use_id: block.id,
               content:
-                `Quote: ${q.currency} ${q.total} total (incl. ${q.gstRate}% GST). ${q.service} (${q.sla}), ` +
-                `${q.zone} (~${q.km} km), ${q.kg} kg.${adds} Subtotal ${q.currency} ${q.subtotal} + GST ` +
-                `${q.currency} ${q.gst}. A downloadable PDF quotation has been prepared for the customer — tell ` +
-                `them they can download it below. Quote this exact total; note re-weighing or zone changes at ` +
-                `pickup may alter the final charge.`,
-            });
-          } else if (block.name === "whatsapp_handoff") {
-            whatsappUrl = buildHandoffLink((block.input || {}).summary);
-            whatsappLabel = "Chat with our team on WhatsApp";
-            results.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: "A WhatsApp button to reach our team has been shown to the customer. Briefly let them know they can tap it to chat with a person.",
+                `Quote: ${q.currency} ${q.total} total (incl. ${p.gst}% GST). ${q.tier.name} (${q.tier.sla}), ` +
+                `${q.zone.name} (~${q.km} km), ${q.kg} kg.${adds} Subtotal ${q.currency} ${q.subtotal} + GST ` +
+                `${q.currency} ${q.gst}. Quote this exact total to the customer; note re-weighing or zone changes ` +
+                `at pickup may alter the final charge.`,
             });
           } else if (block.name === "create_whatsapp_booking") {
             whatsappUrl = buildBookingLink(block.input || {});
-            whatsappLabel = "Send booking to WhatsApp";
-            recordLead({ ...(block.input || {}), ip }); // record in the CRM (non-blocking)
+            recordLead(block.input || {}); // record in the CRM (non-blocking)
             results.push({
               type: "tool_result",
               tool_use_id: block.id,
@@ -342,13 +287,14 @@ app.post("/chat", async (req, res) => {
 
       const reply = textOf(response);
       return res.json({
-        reply: reply || "Tap the button below to continue. 😊",
-        whatsappUrl, whatsappLabel, quote: quoteInfo,
+        reply: reply || "Your booking summary is ready — tap the WhatsApp button to send it to our team.",
+        whatsappUrl,
       });
     }
+    // Loop exhausted (shouldn't happen) — still hand off if we built a link.
     return res.json({
-      reply: "Tap the button below to continue. 😊",
-      whatsappUrl, whatsappLabel, quote: quoteInfo,
+      reply: "Your booking summary is ready — tap the WhatsApp button to send it to our team.",
+      whatsappUrl,
     });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
@@ -357,76 +303,6 @@ app.post("/chat", async (req, res) => {
     console.error("chat error:", err?.status, err?.message);
     res.status(500).json({ error: "Something went wrong. Please WhatsApp us at +65 8996 8390." });
   }
-});
-
-// Downloadable PDF quotation for a previously calculated quote.
-app.get("/quote/:file", (req, res) => {
-  const id = String(req.params.file || "").replace(/\.pdf$/i, "");
-  const q = quotes.get(id);
-  if (!q) return res.status(404).send("Quotation not found or expired.");
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${q.number}.pdf"`);
-
-  const doc = new PDFDocument({ size: "A4", margin: 50 });
-  doc.pipe(res);
-  const cur = q.currency;
-  const money = (n) => `${cur} ${Number(n).toFixed(2)}`;
-  const NAVY = "#0f2530", TEAL = "#0ea5b7", GREY = "#6b7c85", LINE = "#e6ebee";
-
-  // Header
-  doc.fontSize(22).fillColor(NAVY).font("Helvetica-Bold").text("UrbanFleet SG", 50, 50);
-  doc.fontSize(9).fillColor(GREY).font("Helvetica").text("URBAN WERKZ · COURIER & SAME-DAY DELIVERY", 50, 76);
-  doc.fontSize(13).fillColor(NAVY).font("Helvetica-Bold").text(q.number, 0, 50, { align: "right" });
-  doc.fontSize(10).fillColor(GREY).font("Helvetica").text(new Date(q._at).toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" }), 0, 68, { align: "right" });
-  doc.text("Singapore · GST Reg.", 0, 82, { align: "right" });
-  doc.moveTo(50, 100).lineTo(545, 100).lineWidth(2).strokeColor(TEAL).stroke();
-
-  doc.fontSize(16).fillColor(NAVY).font("Helvetica-Bold").text("Delivery Service Quotation", 50, 116);
-
-  // Info grid
-  let y = 146;
-  const info = [
-    ["Service", q.service], ["Delivery window", q.sla],
-    ["Zone", q.zone], ["Coverage", q.zoneDesc || "—"],
-    ["Estimated distance", `~${q.km} km`], ["Parcel weight", `${q.kg} kg`],
-  ];
-  doc.fontSize(10.5).font("Helvetica");
-  for (let i = 0; i < info.length; i += 2) {
-    doc.fillColor(GREY).text(info[i][0] + ":", 50, y, { continued: true }).fillColor(NAVY).font("Helvetica-Bold").text(" " + info[i][1]);
-    doc.font("Helvetica").fillColor(GREY).text(info[i + 1][0] + ":", 310, y, { continued: true }).fillColor(NAVY).font("Helvetica-Bold").text(" " + info[i + 1][1]);
-    doc.font("Helvetica");
-    y += 22;
-  }
-
-  // Line items
-  y += 10;
-  doc.rect(50, y, 495, 22).fill(NAVY);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10).text("DESCRIPTION", 60, y + 6).text("AMOUNT (SGD)", 0, y + 6, { align: "right", width: 535 });
-  y += 22;
-  const row = (label, amt, opts = {}) => {
-    doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(opts.big ? 12 : 10.5).fillColor(opts.bold ? NAVY : "#333");
-    doc.text(label, 60, y + 6, { width: 380 });
-    doc.text(money(amt), 0, y + 6, { align: "right", width: 535 });
-    doc.moveTo(50, y + 24).lineTo(545, y + 24).lineWidth(0.5).strokeColor(LINE).stroke();
-    y += 24;
-  };
-  row(`${q.service} delivery service charge`, q.deliveryCharge);
-  row("Fuel surcharge", q.fuel);
-  for (const a of q.addOns) row(a.label, a.amt);
-  row("Subtotal (before GST)", q.subtotal, { bold: true });
-  row(`GST (${q.gstRate}%)`, q.gst);
-  doc.rect(50, y, 495, 28).fill("#f4f8f9");
-  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(13).text("Total payable", 60, y + 8).text(money(q.total), 0, y + 8, { align: "right", width: 535 });
-  y += 44;
-
-  // Terms
-  doc.fontSize(8.5).fillColor(GREY).font("Helvetica");
-  doc.text("Validity: This quotation is valid for 14 days from the date of issue.", 50, y);
-  doc.text("Terms: Prices are inclusive of GST. Rates are based on the details provided; re-weighing or zone changes at pickup may alter the final charge.", 50, y + 14, { width: 495 });
-  doc.text("UrbanFleet SG · urbanfleetsg.com · WhatsApp +65 8996 8390 · Urbanfleet@gmail.com · Thank you for your business.", 50, y + 40, { width: 495 });
-
-  doc.end();
 });
 
 app.listen(PORT, () => console.log(`urbanlog-chat listening on :${PORT} (model: ${MODEL})`));

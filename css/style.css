@@ -777,3 +777,5 @@ body {
 }
 .chat-cta:hover { background: #1ebe5a; transform: translateY(-1px); }
 .chat-cta i { font-size: 1.2rem; }
+.chat-cta.pdf { background: #0d2740; box-shadow: 0 4px 12px rgba(13, 39, 64, 0.3); }
+.chat-cta.pdf:hover { background: #081a2c; }
