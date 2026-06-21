@@ -25,7 +25,10 @@ async function recordLead(details) {
   }
 }
 
-const PRICING_URL = process.env.PRICING_URL || ""; // CMS rate card the bot quotes from
+const PRICING_URL = process.env.PRICING_URL || ""; // CMS rate card (local-compute fallback)
+// CDMS encrypted rate card is the source of truth: the bot calls its public quote API,
+// which decrypts the rate model, computes the customer price, saves the quote, and serves the PDF.
+const RATE_CARD_API = process.env.RATE_CARD_URL || "https://app.urbanfleetsg.com/api/rate-card";
 
 // CDMS rate card defaults (fallback if the CMS is unreachable). The CMS is the source of truth.
 const DEFAULT_PRICING = {
@@ -308,21 +311,42 @@ app.post("/chat", async (req, res) => {
         for (const block of response.content) {
           if (block.type !== "tool_use") continue;
           if (block.name === "calculate_quote") {
-            const p = await getPricing();
             const inp = block.input || {};
-            const q = computeQuote(p, inp.service, inp.distance_km, inp.weight_kg, inp.surcharges || []);
-            const id = storeQuote(q);
-            quoteInfo = { id, total: q.total, currency: q.currency, pdfUrl: `/api/quote/${id}.pdf` };
-            const adds = q.addOns.length ? ` Add-ons: ${q.addOns.map((a) => `${a.label} ${q.currency} ${a.amt}`).join(", ")}.` : "";
+            const km = Math.max(0, Number(inp.distance_km) || 0);
+            // Map driving distance to a CDMS zone: 1 ≤5km, 2 ≤12km, 3 ≤20km, 4 >20km.
+            const zone = km <= 5 ? 1 : km <= 12 ? 2 : km <= 20 ? 3 : 4;
+            const kg = Math.max(0.1, Number(inp.weight_kg) || 0.1);
+            let reference, total, currency = "SGD", service = inp.service, sla = "", pdfUrl, ok = false;
+            try {
+              const r = await fetch(`${RATE_CARD_API}/quote`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tier: inp.service, zone, weightKg: kg }),
+              });
+              if (!r.ok) throw new Error(`rate-card ${r.status}`);
+              const cq = await r.json();
+              reference = cq.reference; total = cq.total; currency = cq.currency || "SGD";
+              service = cq.serviceTier?.name || service; sla = cq.serviceTier?.sla || "";
+              pdfUrl = `${RATE_CARD_API}/quote/${reference}/pdf`;
+              quoteInfo = { reference, total, currency, pdfUrl };
+              ok = true;
+            } catch (e) {
+              // Fallback to local compute if the CDMS rate-card API is unreachable.
+              const q = computeQuote(await getPricing(), inp.service, inp.distance_km, kg, inp.surcharges || []);
+              const id = storeQuote(q);
+              reference = q.number; total = q.total; currency = q.currency; service = q.service; sla = q.sla;
+              pdfUrl = `/api/quote/${id}.pdf`;
+              quoteInfo = { id, reference, total, currency, pdfUrl };
+            }
             results.push({
               type: "tool_result",
               tool_use_id: block.id,
               content:
-                `Quote: ${q.currency} ${q.total} total (incl. ${q.gstRate}% GST). ${q.service} (${q.sla}), ` +
-                `${q.zone} (~${q.km} km), ${q.kg} kg.${adds} Subtotal ${q.currency} ${q.subtotal} + GST ` +
-                `${q.currency} ${q.gst}. A downloadable PDF quotation has been prepared for the customer — tell ` +
-                `them they can download it below. Quote this exact total; note re-weighing or zone changes at ` +
-                `pickup may alter the final charge.`,
+                `Quote ${reference}: ${currency} ${total} total, GST-inclusive (9%). ${service}` +
+                (sla ? ` (${sla})` : "") + `, ~${km} km (zone ${zone}), ${kg} kg. ` +
+                (ok ? "Priced from the live CDMS rate card. " : "") +
+                `A downloadable PDF quotation is ready — tell the customer they can download it below. Quote ` +
+                `this EXACT total; note re-weighing or zone changes at pickup may alter the final charge.`,
             });
           } else if (block.name === "whatsapp_handoff") {
             whatsappUrl = buildHandoffLink((block.input || {}).summary);
