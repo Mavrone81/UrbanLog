@@ -1,6 +1,6 @@
-# UrbanLog (Urban Werkz Delivery) — static site container.
-# Published only on loopback; the host nginx reverse-proxies urbanfleetsg.com -> 127.0.0.1:20031.
-# Named distinctly so it never collides with the unrelated `urbanwerkz` app on the same host.
+# UrbanLog (Urban Werkz Delivery) — static site + chatbot proxy + CMS/admin.
+# Published only on loopback; the host nginx reverse-proxies each to its path.
+# Named distinctly so they never collide with the unrelated `urbanwerkz` app on the same host.
 services:
   app:
     build: .
@@ -10,9 +10,8 @@ services:
     ports:
       - "127.0.0.1:20031:80"
 
-  # Server-side Claude proxy for the chatbot. The host nginx reverse-proxies
-  # urbanfleetsg.com/api/ -> 127.0.0.1:20032. The API key comes from .env
-  # (server-managed, git-ignored) — never baked into the image.
+  # Server-side Claude proxy for the chatbot. nginx: urbanfleetsg.com/api/ -> 127.0.0.1:20032.
+  # The API key comes from .env (server-managed, git-ignored) — never baked into the image.
   chat:
     build: ./chat
     image: urbanlog-chat
@@ -20,5 +19,29 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Confirmed bookings are forwarded to the CMS so they appear in the CRM.
+      - LEAD_URL=http://admin:3000/cms/lead
+      # The bot quotes from the CMS-managed rate card.
+      - PRICING_URL=http://admin:3000/cms/pricing
     ports:
       - "127.0.0.1:20032:3000"
+
+  # CMS / admin (SEO, content, CRM, logo). nginx: /admin and /cms/ -> 127.0.0.1:20033.
+  # Content + leads + uploads persist in the named volume (survives deploys).
+  admin:
+    build: ./admin
+    image: urbanlog-admin
+    container_name: urbanlog-admin
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/data
+    volumes:
+      - urbanlog_cms_data:/data
+    ports:
+      - "127.0.0.1:20033:3000"
+
+volumes:
+  urbanlog_cms_data:

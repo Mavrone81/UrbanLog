@@ -98,6 +98,15 @@ describe('link & asset integrity (parsed from index.html)', () => {
     expect(chatJs).not.toMatch(/sk-ant-/);
   });
 
+  it('wires up CMS overrides on the public page', () => {
+    expect(html).toMatch(/<script[^>]*src="js\/cms\.js"/);
+    expect(html).toMatch(/data-cms="heroTitleTop"/);
+    expect(html).toMatch(/data-cms="phone"/);
+    expect(fs.existsSync(path.join(ROOT, 'js/cms.js'))).toBe(true);
+    const cmsJs = fs.readFileSync(path.join(ROOT, 'js/cms.js'), 'utf8');
+    expect(cmsJs).toMatch(/\/cms\/site/);
+  });
+
   it('references the favicon assets', () => {
     expect(html).toMatch(/rel="icon"[^>]*href="favicon\.png"/);
     expect(fs.existsSync(path.join(ROOT, 'favicon.png'))).toBe(true);

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Urban Werkz — Admin CMS</title>
+<style>
+  :root { --primary:#356285; --primary-dark:#2a5276; --orange:#f9831d; --bg:#f1f5f9; --line:#e2e8f0; --muted:#64748b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:#1f2937; }
+  a { color:var(--primary); }
+  .hidden { display:none !important; }
+  /* Login */
+  .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1rem; }
+  .card { background:#fff; border-radius:14px; box-shadow:0 10px 30px rgba(31,41,55,.12); }
+  .login-card { width:100%; max-width:380px; padding:2rem; }
+  .login-card h1 { font-size:1.35rem; margin-bottom:.3rem; color:var(--primary-dark); }
+  .login-card p { color:var(--muted); font-size:.9rem; margin-bottom:1.3rem; }
+  label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin:.7rem 0 .3rem; }
+  input, textarea { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:.6rem .75rem; font:inherit; font-size:.92rem; outline:none; }
+  input:focus, textarea:focus { border-color:var(--primary); }
+  textarea { resize:vertical; min-height:70px; }
+  .btn { background:var(--primary); color:#fff; border:none; border-radius:8px; padding:.6rem 1.1rem; font-weight:600; cursor:pointer; font-size:.92rem; }
+  .btn:hover { background:var(--primary-dark); }
+  .btn-orange { background:var(--orange); } .btn-orange:hover { filter:brightness(.95); }
+  .btn-ghost { background:#fff; color:var(--primary); border:1px solid var(--line); }
+  .btn-danger { background:#ef4444; } .btn-danger:hover { background:#dc2626; }
+  .msg { font-size:.85rem; margin-top:.8rem; min-height:1.1rem; }
+  .msg.err { color:#dc2626; } .msg.ok { color:#059669; }
+  /* App */
+  header { background:var(--primary); color:#fff; padding:.9rem 1.3rem; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:1.1rem; }
+  .wrap { max-width:920px; margin:1.3rem auto; padding:0 1rem; }
+  .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .tab { background:#fff; border:1px solid var(--line); border-radius:8px; padding:.5rem .9rem; cursor:pointer; font-weight:600; font-size:.9rem; color:#475569; }
+  .tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .panel { padding:1.4rem; margin-bottom:1rem; }
+  .panel h2 { font-size:1.05rem; margin-bottom:.3rem; color:var(--primary-dark); }
+  .panel .sub { color:var(--muted); font-size:.85rem; margin-bottom:1rem; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media(max-width:640px){ .grid2{ grid-template-columns:1fr; } }
+  .row-actions { margin-top:1.1rem; display:flex; align-items:center; gap:1rem; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th,td { text-align:left; padding:.55rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; }
+  .lead-meta { color:var(--muted); font-size:.78rem; }
+  .logo-preview { width:84px; height:84px; border-radius:12px; border:1px solid var(--line); object-fit:cover; background:#fff; }
+  .pill { display:inline-block; background:#eef2ff; color:#4338ca; border-radius:999px; padding:.1rem .55rem; font-size:.72rem; font-weight:600; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login-wrap">
+  <div class="card login-card">
+    <h1>Urban Werkz CMS</h1>
+    <p>Sign in to manage your site.</p>
+    <form id="loginForm">
+      <label for="u">Username</label>
+      <input id="u" autocomplete="username" required>
+      <label for="p">Password</label>
+      <input id="p" type="password" autocomplete="current-password" required>
+      <div class="row-actions"><button class="btn" type="submit">Sign in</button></div>
+      <div id="loginMsg" class="msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <header>
+    <h1>Urban Werkz — Admin CMS</h1>
+    <button class="btn btn-ghost" id="logout">Log out</button>
+  </header>
+  <div class="wrap">
+    <div class="tabs">
+      <div class="tab active" data-tab="content">Content & SEO</div>
+      <div class="tab" data-tab="pricing">Pricing</div>
+      <div class="tab" data-tab="crm">CRM / Leads</div>
+      <div class="tab" data-tab="logo">Logo</div>
+    </div>
+
+    <!-- CONTENT + SEO -->
+    <div class="card panel" data-panel="content">
+      <h2>SEO</h2>
+      <p class="sub">Search engine title and description for the homepage.</p>
+      <label>Page title</label><input id="seoTitle">
+      <label>Meta description</label><textarea id="seoDesc"></textarea>
+      <h2 style="margin-top:1.4rem">Homepage content</h2>
+      <p class="sub">Hero text and contact details shown on the live site.</p>
+      <div class="grid2">
+        <div><label>Hero title (line 1)</label><input id="heroTop"></div>
+        <div><label>Hero title (line 2)</label><input id="heroBottom"></div>
+      </div>
+      <label>Hero subtitle</label><input id="heroSub">
+      <div class="grid2">
+        <div><label>Phone (display)</label><input id="phone"></div>
+        <div><label>WhatsApp number (digits, e.g. 6589968390)</label><input id="whatsapp"></div>
+      </div>
+      <div class="grid2">
+        <div><label>Email</label><input id="email"></div>
+        <div><label>Availability line</label><input id="availability"></div>
+      </div>
+      <div class="row-actions"><button class="btn btn-orange" id="saveContent">Save changes</button><span id="contentMsg" class="msg"></span></div>
+    </div>
+
+    <!-- PRICING -->
+    <div class="card panel hidden" data-panel="pricing">
+      <h2>Quote rate card</h2>
+      <p class="sub">The chatbot uses these to give customers an estimated price. Estimate = max(min fare, (base + per-km×distance + size surcharge) × service multiplier).</p>
+      <div class="grid2">
+        <div><label>Currency</label><input id="prCurrency"></div>
+        <div><label>Minimum fare</label><input id="prMin" type="number" step="0.5"></div>
+        <div><label>Base fare</label><input id="prBase" type="number" step="0.5"></div>
+        <div><label>Price per km</label><input id="prPerKm" type="number" step="0.1"></div>
+      </div>
+      <h2 style="margin-top:1.3rem">Size surcharge</h2>
+      <div class="grid2">
+        <div><label>Small</label><input id="prSizeS" type="number" step="0.5"></div>
+        <div><label>Medium</label><input id="prSizeM" type="number" step="0.5"></div>
+        <div><label>Large</label><input id="prSizeL" type="number" step="0.5"></div>
+      </div>
+      <h2 style="margin-top:1.3rem">Service multiplier</h2>
+      <div class="grid2">
+        <div><label>Same-day</label><input id="prSvcSameday" type="number" step="0.05"></div>
+        <div><label>Express</label><input id="prSvcExpress" type="number" step="0.05"></div>
+        <div><label>Scheduled</label><input id="prSvcScheduled" type="number" step="0.05"></div>
+        <div><label>Regional</label><input id="prSvcRegional" type="number" step="0.05"></div>
+      </div>
+      <div class="row-actions"><button class="btn btn-orange" id="savePricing">Save pricing</button><span id="pricingMsg" class="msg"></span></div>
+    </div>
+
+    <!-- CRM -->
+    <div class="card panel hidden" data-panel="crm">
+      <h2>Leads / CRM</h2>
+      <p class="sub">Booking enquiries captured from the website chatbot. <button class="btn btn-ghost" id="refreshLeads" style="padding:.3rem .7rem">Refresh</button></p>
+      <div id="leadsWrap"></div>
+    </div>
+
+    <!-- LOGO -->
+    <div class="card panel hidden" data-panel="logo">
+      <h2>Logo / Favicon</h2>
+      <p class="sub">Upload a square PNG/JPG (max 2 MB). Used as the site favicon.</p>
+      <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem">
+        <img id="logoPreview" class="logo-preview" alt="current logo">
+        <div>
+          <input type="file" id="logoFile" accept="image/*">
+          <div class="row-actions"><button class="btn btn-orange" id="uploadLogo">Upload</button><span id="logoMsg" class="msg"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = (url, opts={}) => fetch(url, { credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...opts });
+
+async function init() {
+  const me = await api('/cms/me').then(r=>r.json()).catch(()=>({user:null}));
+  if (me.user) showApp(); else showLogin();
+}
+function showLogin(){ $('login').classList.remove('hidden'); $('app').classList.add('hidden'); }
+function showApp(){ $('login').classList.add('hidden'); $('app').classList.remove('hidden'); loadContent(); loadLeads(); }
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await api('/cms/login', { method:'POST', body: JSON.stringify({ username:$('u').value, password:$('p').value }) });
+  if (r.ok) { $('loginMsg').textContent=''; showApp(); }
+  else { const d = await r.json().catch(()=>({})); $('loginMsg').className='msg err'; $('loginMsg').textContent = d.error || 'Login failed'; }
+});
+$('logout').addEventListener('click', async () => { await api('/cms/logout',{method:'POST'}); showLogin(); });
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== t.dataset.tab));
+}));
+
+// Content + SEO
+async function loadContent() {
+  const d = await api('/cms/content').then(r=>r.json()).catch(()=>null);
+  if (!d) return;
+  $('seoTitle').value=d.seo.title||''; $('seoDesc').value=d.seo.description||'';
+  $('heroTop').value=d.content.heroTitleTop||''; $('heroBottom').value=d.content.heroTitleBottom||'';
+  $('heroSub').value=d.content.heroSubtitle||''; $('phone').value=d.content.phone||'';
+  $('whatsapp').value=d.content.whatsapp||''; $('email').value=d.content.email||''; $('availability').value=d.content.availability||'';
+  $('logoPreview').src = d.logoUrl || '/cms/logo-file?nope';
+  const p = d.pricing || {};
+  $('prCurrency').value=p.currency||'SGD'; $('prMin').value=p.minFare; $('prBase').value=p.baseFare; $('prPerKm').value=p.perKm;
+  $('prSizeS').value=p.sizeSurcharge?.small; $('prSizeM').value=p.sizeSurcharge?.medium; $('prSizeL').value=p.sizeSurcharge?.large;
+  $('prSvcSameday').value=p.serviceMultiplier?.sameday; $('prSvcExpress').value=p.serviceMultiplier?.express;
+  $('prSvcScheduled').value=p.serviceMultiplier?.scheduled; $('prSvcRegional').value=p.serviceMultiplier?.regional;
+}
+$('savePricing').addEventListener('click', async () => {
+  const pricing = { currency:$('prCurrency').value, baseFare:+$('prBase').value, perKm:+$('prPerKm').value, minFare:+$('prMin').value,
+    sizeSurcharge:{ small:+$('prSizeS').value, medium:+$('prSizeM').value, large:+$('prSizeL').value },
+    serviceMultiplier:{ sameday:+$('prSvcSameday').value, express:+$('prSvcExpress').value, scheduled:+$('prSvcScheduled').value, regional:+$('prSvcRegional').value } };
+  const r = await api('/cms/content', { method:'PUT', body: JSON.stringify({ pricing }) });
+  const m=$('pricingMsg'); if(r.ok){ m.className='msg ok'; m.textContent='Pricing saved ✓'; } else { m.className='msg err'; m.textContent='Save failed'; }
+});
+$('saveContent').addEventListener('click', async () => {
+  const body = { seo:{ title:$('seoTitle').value, description:$('seoDesc').value },
+    content:{ heroTitleTop:$('heroTop').value, heroTitleBottom:$('heroBottom').value, heroSubtitle:$('heroSub').value,
+      phone:$('phone').value, whatsapp:$('whatsapp').value.replace(/\D/g,''), email:$('email').value, availability:$('availability').value } };
+  const r = await api('/cms/content', { method:'PUT', body: JSON.stringify(body) });
+  const m=$('contentMsg'); if (r.ok){ m.className='msg ok'; m.textContent='Saved ✓ (live site updates on next load)'; } else { m.className='msg err'; m.textContent='Save failed'; }
+});
+
+// CRM
+async function loadLeads() {
+  const d = await api('/cms/leads').then(r=>r.json()).catch(()=>({leads:[]}));
+  const rows = (d.leads||[]).map(l => `<tr>
+    <td><span class="pill">${esc(l.source)}</span><div class="lead-meta">${new Date(l.createdAt).toLocaleString()}</div></td>
+    <td><strong>${esc(l.service||'—')}</strong>${l.name?'<br>'+esc(l.name):''}${l.contact?'<br>'+esc(l.contact):''}</td>
+    <td>${l.pickup?'↑ '+esc(l.pickup)+'<br>':''}${l.dropoff?'↓ '+esc(l.dropoff):''}${l.item?'<br>'+esc(l.item):''}${l.when?'<br>⏰ '+esc(l.when):''}${l.notes?'<br>'+esc(l.notes):''}</td>
+    <td><button class="btn btn-danger" style="padding:.3rem .6rem" data-del="${l.id}">Delete</button></td></tr>`).join('');
+  $('leadsWrap').innerHTML = rows ? `<table><thead><tr><th>Source / time</th><th>Service / contact</th><th>Details</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="sub">No leads yet.</p>';
+  document.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this lead?')) return;
+    await api('/cms/leads/'+b.dataset.del, { method:'DELETE' }); loadLeads();
+  }));
+}
+$('refreshLeads').addEventListener('click', loadLeads);
+
+// Logo
+$('uploadLogo').addEventListener('click', async () => {
+  const f = $('logoFile').files[0]; const m=$('logoMsg');
+  if (!f) { m.className='msg err'; m.textContent='Choose a file first'; return; }
+  const fd = new FormData(); fd.append('logo', f);
+  const r = await fetch('/cms/logo', { method:'POST', credentials:'same-origin', body: fd });
+  if (r.ok) { const d=await r.json(); $('logoPreview').src=d.logoUrl; m.className='msg ok'; m.textContent='Uploaded ✓'; }
+  else { m.className='msg err'; m.textContent='Upload failed'; }
+});
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+init();
+</script>
+</body>
+</html>

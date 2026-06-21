@@ -8,6 +8,47 @@ const PORT = process.env.PORT || 3000;
 const MODEL = process.env.CHAT_MODEL || "claude-opus-4-8";
 const MAX_TOKENS = Number(process.env.CHAT_MAX_TOKENS || 1024);
 const WHATSAPP_NUMBER = "6589968390";
+const LEAD_URL = process.env.LEAD_URL || ""; // CMS endpoint to record confirmed bookings (CRM)
+
+// Forward a confirmed booking to the CMS CRM. Fire-and-forget — never blocks the reply.
+async function recordLead(details) {
+  if (!LEAD_URL) return;
+  try {
+    await fetch(LEAD_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "chatbot", ...details }),
+    });
+  } catch (e) {
+    console.error("lead forward failed:", e?.message);
+  }
+}
+
+const PRICING_URL = process.env.PRICING_URL || ""; // CMS rate card the bot quotes from
+
+const DEFAULT_PRICING = {
+  currency: "SGD", baseFare: 8, perKm: 0.8, minFare: 10,
+  sizeSurcharge: { small: 0, medium: 3, large: 8 },
+  serviceMultiplier: { sameday: 1.0, express: 1.4, scheduled: 0.85, regional: 1.2 },
+};
+let pricingCache = { at: 0, data: DEFAULT_PRICING };
+async function getPricing() {
+  if (!PRICING_URL) return DEFAULT_PRICING;
+  if (Date.now() - pricingCache.at < 60000) return pricingCache.data;
+  try {
+    const r = await fetch(PRICING_URL);
+    if (r.ok) { pricingCache = { at: Date.now(), data: await r.json() }; }
+  } catch (e) { /* keep last good / default */ }
+  return pricingCache.data;
+}
+function computeQuote(p, service, distanceKm, size) {
+  const svc = Number(p.serviceMultiplier?.[service] ?? 1);
+  const sz = Number(p.sizeSurcharge?.[size] ?? 0);
+  const km = Math.max(0, Number(distanceKm) || 0);
+  let price = (Number(p.baseFare) + Number(p.perKm) * km + sz) * svc;
+  price = Math.max(Number(p.minFare) || 0, price);
+  return { currency: p.currency || "SGD", estimate: Math.round(price), low: Math.round(price * 0.9), high: Math.round(price * 1.15) };
+}
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error("FATAL: ANTHROPIC_API_KEY is not set. Refusing to start.");
@@ -25,19 +66,41 @@ proof of delivery, available 24/7.
 Be concise, warm, and helpful. Answer in 1-3 short sentences or a tight bullet list. Only discuss Urban Werkz \
 Delivery and its services; if asked something unrelated, politely steer back.
 
-WHEN YOU CANNOT HELP: If a question is outside what you can answer — live tracking, exact prices, account/order \
-details, complaints, or anything needing a human — DO NOT guess. Apologise briefly and suggest the user reach \
-our team on WhatsApp at +65 8996 8390 (https://wa.me/6589968390), or by phone (+65 8996 8390) or email \
-(Urbanfleet@gmail.com). Never invent specific prices or delivery guarantees; give ranges and point to a quote.
+QUOTING A PRICE: You CAN give an estimated price using the calculate_quote tool — do not refuse or defer price \
+questions. To quote, you need three things: (1) the service type — one of sameday, express, scheduled, regional; \
+(2) the pickup and drop-off locations, from which YOU estimate the driving distance in km (you know Singapore \
+geography — give your best estimate, e.g. Toa Payoh to Ang Mo Kio ≈ 6 km); (3) the parcel size — small, medium, \
+or large. Ask only for what's missing, one or two questions at a time. Once you have all three, call \
+calculate_quote and then share the result as a range (e.g. "around SGD 14–18"), making clear it's an estimate \
+and the final price is confirmed by our team when the booking is placed. Never invent a price without calling \
+the tool.
 
-BOOKINGS: When a user wants to book a delivery or get a real quote, gather the key details conversationally: \
-service type, pickup location, drop-off location, what's being sent, and preferred time (and their name if they \
-offer it). Once the user CONFIRMS they want to proceed, call the create_whatsapp_booking tool with the details \
-you have collected — this prepares a WhatsApp message they can send to our team to finalise scheduling. After \
-the tool runs, tell the user their booking summary is ready and to tap the WhatsApp button to send it. Do not \
-fabricate details the user did not give; pass through only what you collected.`;
+BOOKINGS: After quoting (or whenever the user wants to proceed), gather pickup, drop-off, item, and preferred \
+time (and their name if offered). When the user CONFIRMS, call create_whatsapp_booking with the details — this \
+prepares a WhatsApp message to send to our team to finalise scheduling. Tell the user to tap the WhatsApp button. \
+Pass through only details the user actually gave.
+
+WHEN YOU CANNOT HELP: For things you genuinely cannot do — live tracking, account/order details, complaints, or \
+anything needing a human — apologise briefly and point the user to WhatsApp +65 8996 8390 \
+(https://wa.me/6589968390), phone (+65 8996 8390), or email (Urbanfleet@gmail.com).`;
 
 const TOOLS = [
+  {
+    name: "calculate_quote",
+    description:
+      "Estimate a delivery price from the company rate card. Call this once you know the service type, an " +
+      "estimated driving distance in km between pickup and drop-off (you estimate it from the addresses), and " +
+      "the parcel size. Returns an estimated price range.",
+    input_schema: {
+      type: "object",
+      properties: {
+        service: { type: "string", enum: ["sameday", "express", "scheduled", "regional"], description: "Service type" },
+        distance_km: { type: "number", description: "Estimated driving distance in km between pickup and drop-off" },
+        size: { type: "string", enum: ["small", "medium", "large"], description: "Parcel size" },
+      },
+      required: ["service", "distance_km", "size"],
+    },
+  },
   {
     name: "create_whatsapp_booking",
     description:
@@ -123,8 +186,8 @@ app.post("/chat", async (req, res) => {
 
   try {
     let whatsappUrl = null;
-    // Short agentic loop so the model can call the booking tool, then reply.
-    for (let i = 0; i < 3; i++) {
+    // Short agentic loop so the model can call quote/booking tools, then reply.
+    for (let i = 0; i < 4; i++) {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
@@ -137,8 +200,22 @@ app.post("/chat", async (req, res) => {
         messages.push({ role: "assistant", content: response.content });
         const results = [];
         for (const block of response.content) {
-          if (block.type === "tool_use" && block.name === "create_whatsapp_booking") {
+          if (block.type !== "tool_use") continue;
+          if (block.name === "calculate_quote") {
+            const p = await getPricing();
+            const inp = block.input || {};
+            const q = computeQuote(p, inp.service, inp.distance_km, inp.size);
+            results.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content:
+                `Estimated price: ${q.currency} ${q.low}–${q.high} (typical ${q.currency} ${q.estimate}) for ` +
+                `${inp.service}, ~${inp.distance_km} km, ${inp.size} parcel. Share this as an ESTIMATE; the final ` +
+                `price is confirmed by the team when the booking is placed.`,
+            });
+          } else if (block.name === "create_whatsapp_booking") {
             whatsappUrl = buildBookingLink(block.input || {});
+            recordLead(block.input || {}); // record in the CRM (non-blocking)
             results.push({
               type: "tool_result",
               tool_use_id: block.id,
