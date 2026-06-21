@@ -564,21 +564,36 @@ body {
 .fab:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(31, 41, 55, 0.28); }
 .fab:active { transform: translateY(-1px); }
 
-/* WhatsApp FAB */
-.fab-whatsapp {
-    background-color: #25d366;
-    padding: 0 1.1rem;
-    width: auto;
-    gap: 0.5rem;
-    position: relative;
+/* Contact FABs: brand colours */
+.fab-call     { background-color: var(--primary); }
+.fab-call:hover { background-color: var(--primary-dark); }
+.fab-whatsapp { background-color: #25d366; position: relative; }
+.fab-whatsapp:hover { background-color: #1ebe5a; }
+.fab-email    { background-color: var(--orange); }
+.fab-email:hover { background-color: var(--orange-hover); }
+
+/* Slide-out label shown to the left of the round button on hover/focus */
+.fab-label {
+    position: absolute;
+    right: calc(100% + 0.6rem);
+    background-color: var(--text-dark);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    padding: 0.4rem 0.7rem;
+    border-radius: 0.4rem;
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
+    transition: var(--transition);
+    box-shadow: 0 4px 12px rgba(31, 41, 55, 0.18);
 }
 
-.fab-whatsapp:hover { background-color: #1ebe5a; }
-
-.fab-label {
-    font-weight: 600;
-    font-size: 0.95rem;
-    white-space: nowrap;
+.fab:hover .fab-label,
+.fab:focus-visible .fab-label {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 /* Soft attention pulse on the WhatsApp button */
@@ -620,7 +635,7 @@ body {
 }
 
 @media (max-width: 768px) {
-    .floating-actions { bottom: 1rem; right: 1rem; }
-    .fab-whatsapp .fab-label { display: none; }
-    .fab-whatsapp { width: 3.5rem; padding: 0; }
+    .floating-actions { bottom: 1rem; right: 1rem; gap: 0.7rem; }
+    .fab { width: 3.25rem; height: 3.25rem; }
+    .fab i { font-size: 1.5rem; }
 }

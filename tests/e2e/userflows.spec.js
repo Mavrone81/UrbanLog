@@ -51,12 +51,32 @@ test.describe('Direct contact flow', () => {
 });
 
 test.describe('Floating action buttons', () => {
+  test('Call FAB dials the website number', async ({ page }) => {
+    await page.goto('/');
+    const call = page.locator('.fab-call');
+    await expect(call).toBeVisible();
+    await expect(call).toHaveAttribute('href', `tel:+${WA}`);
+  });
+
   test('WhatsApp FAB is always visible and links to WhatsApp', async ({ page }) => {
     await page.goto('/');
     const wa = page.locator('.fab-whatsapp');
     await expect(wa).toBeVisible();
     await expect(wa).toHaveAttribute('href', new RegExp(`wa\\.me/${WA}`));
     await expect(wa).toHaveAttribute('target', '_blank');
+  });
+
+  test('Email FAB opens a mailto to the support address', async ({ page }) => {
+    await page.goto('/');
+    const email = page.locator('.fab-email');
+    await expect(email).toBeVisible();
+    await expect(email).toHaveAttribute('href', /^mailto:Urbanfleet@gmail\.com/i);
+  });
+
+  test('favicon link points to the PNG icon', async ({ page }) => {
+    await page.goto('/');
+    const icon = page.locator('link[rel="icon"]');
+    await expect(icon).toHaveAttribute('href', 'favicon.png');
   });
 
   test('back-to-top FAB is hidden at the top and appears after scrolling', async ({ page }) => {

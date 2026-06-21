@@ -83,6 +83,17 @@ describe('link & asset integrity (parsed from index.html)', () => {
     }
   });
 
+  it('has tel + mailto contact links with the right targets', () => {
+    expect(html).toMatch(/href="tel:\+6589968390"/);
+    expect(html).toMatch(/href="mailto:Urbanfleet@gmail\.com/i);
+  });
+
+  it('references the favicon assets', () => {
+    expect(html).toMatch(/rel="icon"[^>]*href="favicon\.png"/);
+    expect(fs.existsSync(path.join(ROOT, 'favicon.png'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'apple-touch-icon.png'))).toBe(true);
+  });
+
   it('external resource links use https', () => {
     const ext = [...html.matchAll(/(?:href|src)="(https?:\/\/[^"]+)"/g)].map(m => m[1]);
     for (const url of ext) {

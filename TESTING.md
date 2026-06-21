@@ -10,7 +10,7 @@ The app is a **vanilla static site** — `index.html`, `css/style.css`, `js/main
 | Integration | Vitest + Node `http`/`fs` | static-file serving, asset & link integrity | `npm run test:integration` |
 | E2E | [Playwright](https://playwright.dev) | full user journeys in real browsers | `npm run test:e2e` |
 
-Current status: **25 tests passing** (17 Vitest + 8 Playwright). Unit coverage of `js/main.js`: **100% functions**.
+Current status: **30 tests passing** (19 Vitest + 11 Playwright). Unit coverage of `js/main.js`: **100% functions**.
 
 ---
 
