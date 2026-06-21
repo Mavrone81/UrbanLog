@@ -1,7 +1,7 @@
 // Unit tests for js/main.js -> initScrollReveal()
 // jsdom has no IntersectionObserver, so we inject a controllable fake and assert behaviour.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { initScrollReveal } from '../../js/main.js';
+import { initScrollReveal, initBackToTop } from '../../js/main.js';
 
 // A fake IntersectionObserver that records observe/unobserve calls and lets the
 // test manually fire the callback with chosen entries.
@@ -87,5 +87,50 @@ describe('initScrollReveal', () => {
     ]);
     expect(a.classList.contains('is-visible')).toBe(true);
     expect(b.classList.contains('is-visible')).toBe(false);
+  });
+});
+
+describe('initBackToTop', () => {
+  // A fake window that lets the test drive scroll position and capture handlers.
+  function makeWin() {
+    const handlers = {};
+    return {
+      scrollY: 0,
+      scrolledTo: null,
+      addEventListener: (evt, fn) => { handlers[evt] = fn; },
+      scrollTo: function (opts) { this.scrolledTo = opts; },
+      _fire: (evt) => handlers[evt] && handlers[evt](),
+    };
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = `<button id="backToTop"></button>`;
+  });
+
+  it('returns null and no-ops when the button is absent', () => {
+    document.body.innerHTML = '';
+    expect(initBackToTop(document, makeWin())).toBeNull();
+  });
+
+  it('keeps the button hidden while scroll is below the threshold', () => {
+    const win = makeWin();
+    win.scrollY = 100;
+    initBackToTop(document, win, 400);
+    expect(document.getElementById('backToTop').classList.contains('is-shown')).toBe(false);
+  });
+
+  it('shows the button once scrolled past the threshold', () => {
+    const win = makeWin();
+    initBackToTop(document, win, 400);
+    win.scrollY = 500;
+    win._fire('scroll');
+    expect(document.getElementById('backToTop').classList.contains('is-shown')).toBe(true);
+  });
+
+  it('smooth-scrolls to the top when clicked', () => {
+    const win = makeWin();
+    initBackToTop(document, win, 400);
+    document.getElementById('backToTop').click();
+    expect(win.scrolledTo).toEqual({ top: 0, behavior: 'smooth' });
   });
 });

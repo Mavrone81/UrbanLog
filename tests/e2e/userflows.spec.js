@@ -50,6 +50,26 @@ test.describe('Direct contact flow', () => {
   });
 });
 
+test.describe('Floating action buttons', () => {
+  test('WhatsApp FAB is always visible and links to WhatsApp', async ({ page }) => {
+    await page.goto('/');
+    const wa = page.locator('.fab-whatsapp');
+    await expect(wa).toBeVisible();
+    await expect(wa).toHaveAttribute('href', new RegExp(`wa\\.me/${WA}`));
+    await expect(wa).toHaveAttribute('target', '_blank');
+  });
+
+  test('back-to-top FAB is hidden at the top and appears after scrolling', async ({ page }) => {
+    await page.goto('/');
+    const top = page.locator('#backToTop');
+    await expect(top).not.toHaveClass(/is-shown/);
+    await page.evaluate(() => window.scrollTo(0, 1200));
+    await expect(top).toHaveClass(/is-shown/);
+    await top.click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(50);
+  });
+});
+
 test.describe('Scroll-reveal animation', () => {
   test('off-screen .target-observe elements become visible after scrolling into view', async ({ page }) => {
     await page.goto('/');

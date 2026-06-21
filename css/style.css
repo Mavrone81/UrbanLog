@@ -531,3 +531,96 @@ body {
     .tracking-split { grid-template-columns: 1fr; }
     .section-title { font-size: 2rem; }
 }
+
+/* Floating Action Buttons */
+.floating-actions {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.85rem;
+}
+
+.fab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 999px;
+    color: var(--white);
+    box-shadow: 0 6px 18px rgba(31, 41, 55, 0.22);
+    transition: var(--transition);
+}
+
+.fab i { font-size: 1.6rem; line-height: 1; }
+
+.fab:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(31, 41, 55, 0.28); }
+.fab:active { transform: translateY(-1px); }
+
+/* WhatsApp FAB */
+.fab-whatsapp {
+    background-color: #25d366;
+    padding: 0 1.1rem;
+    width: auto;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.fab-whatsapp:hover { background-color: #1ebe5a; }
+
+.fab-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+/* Soft attention pulse on the WhatsApp button */
+.fab-whatsapp::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55);
+    animation: fab-pulse 2.4s infinite;
+}
+
+@keyframes fab-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5); }
+    70%  { box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+}
+
+/* Back-to-top FAB — hidden until the user scrolls down */
+.fab-top {
+    background-color: var(--primary);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(12px);
+    pointer-events: none;
+}
+
+.fab-top:hover { background-color: var(--primary-dark); }
+
+.fab-top.is-shown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fab-whatsapp::after { animation: none; }
+}
+
+@media (max-width: 768px) {
+    .floating-actions { bottom: 1rem; right: 1rem; }
+    .fab-whatsapp .fab-label { display: none; }
+    .fab-whatsapp { width: 3.5rem; padding: 0; }
+}

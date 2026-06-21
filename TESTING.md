@@ -10,7 +10,7 @@ The app is a **vanilla static site** — `index.html`, `css/style.css`, `js/main
 | Integration | Vitest + Node `http`/`fs` | static-file serving, asset & link integrity | `npm run test:integration` |
 | E2E | [Playwright](https://playwright.dev) | full user journeys in real browsers | `npm run test:e2e` |
 
-Current status: **19 tests passing** (13 Vitest + 6 Playwright). Unit coverage of `js/main.js`: **94.87% statements, 100% functions**.
+Current status: **25 tests passing** (17 Vitest + 8 Playwright). Unit coverage of `js/main.js`: **100% functions**.
 
 ---
 
@@ -30,6 +30,10 @@ Current status: **19 tests passing** (13 Vitest + 6 Playwright). Unit coverage o
 | `initScrollReveal` | element not yet intersecting | does **not** add `.is-visible`, does **not** unobserve |
 | `initScrollReveal` | page with zero targets | does not throw; observes nothing (edge case) |
 | `initScrollReveal` | mixed batch of entries | intersecting → revealed, non-intersecting → untouched, independently |
+| `initBackToTop` | button absent | returns `null`, no-ops |
+| `initBackToTop` | scroll below threshold | back-to-top button stays hidden (no `.is-shown`) |
+| `initBackToTop` | scroll past threshold | button gains `.is-shown` |
+| `initBackToTop` | click | calls `scrollTo({top:0, behavior:'smooth'})` |
 
 ---
 
@@ -66,6 +70,8 @@ There are no internal APIs/DB to integrate. The real "connections" are: the **HT
 | **Get a quote (service cards)** | ≥4 "Get Quote" buttons → each `href` contains `wa.me/6589968390` and a prefilled `text=` message |
 | **Become a driver** | "Driver Partner Sign Up" → `href` matches `wa.me/6589968390...driver` |
 | **Direct contact** | phone link → `wa.me/6589968390`; visible number reads `8996 8390` |
+| **Floating WhatsApp FAB** | always visible → links to `wa.me/6589968390`, opens new tab |
+| **Floating back-to-top FAB** | hidden at top → appears after scrolling → click returns to top |
 | **Scroll-reveal** | scroll an off-screen `.target-observe` into view → it gains `.is-visible` |
 
 Failure/recovery paths covered: the 404 path (integration), the "not intersecting" non-reveal (unit), and the no-targets edge case (unit). There is no auth/payment/error UI in the app to recover from.
