@@ -1,0 +1,21 @@
+{
+  "name": "urbanlog",
+  "version": "1.0.0",
+  "description": "Urban Werkz Delivery — static marketing site (urbanfleetsg.com)",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:all": "vitest run && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "jsdom": "^25.0.0",
+    "vitest": "^2.1.0"
+  }
+}

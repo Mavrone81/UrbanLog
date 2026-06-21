@@ -8,3 +8,13 @@ Dockerfile
 docker-compose.yml
 *.md
 node_modules
+
+# Test harness — not part of the served site
+tests
+package.json
+package-lock.json
+vitest.config.js
+playwright.config.js
+playwright-report
+test-results
+coverage
