@@ -154,9 +154,11 @@ prepares a WhatsApp message to send to our team to finalise scheduling. Tell the
 Pass through only details the user actually gave.
 
 WHEN YOU CANNOT HELP: For things you genuinely cannot do — live tracking, account/order details, complaints, or \
-anything needing a human — apologise briefly and call the whatsapp_handoff tool. It shows the customer a button \
-to chat with our team on WhatsApp; tell them to tap it. You can also mention phone (+65 8996 8390) or email \
-(Urbanfleet@gmail.com).`;
+anything needing a human — apologise briefly and call the whatsapp_handoff tool. ALWAYS pass a summary that \
+captures the whole conversation: the customer's issue and every detail they gave (name, order/tracking number, \
+pickup & drop-off, item, timing, what they want) — written in their voice — so our team has full context and the \
+customer never has to repeat themselves. The button's WhatsApp message is pre-filled with that summary; tell the \
+customer to tap it. You can also mention phone (+65 8996 8390) or email (Urbanfleet@gmail.com).`;
 
 const TOOLS = [
   {
@@ -164,13 +166,20 @@ const TOOLS = [
     description:
       "Hand the customer off to a human on WhatsApp. Call this whenever you cannot fully help — live tracking, " +
       "account/order issues, complaints, special requests, or anything needing a person. It shows the customer a " +
-      "WhatsApp button to chat with our team.",
+      "WhatsApp button whose message is PRE-FILLED with your summary, so they don't have to re-explain.",
     input_schema: {
       type: "object",
       properties: {
-        summary: { type: "string", description: "A short summary of what the customer needs, prefilled into the WhatsApp message" },
+        summary: {
+          type: "string",
+          description:
+            "A concise summary of the WHOLE conversation so far — the customer's issue/request and every relevant " +
+            "detail they gave (name, order/tracking number, pickup & drop-off, item, timing, what they want). " +
+            "Write it in the customer's voice (e.g. 'My parcel UW-123 is late and I'd like a refund'). This is " +
+            "pre-filled into the WhatsApp message to our team.",
+        },
       },
-      required: [],
+      required: ["summary"],
     },
   },
   {
