@@ -77,6 +77,7 @@
       <div class="tab active" data-tab="content">Content & SEO</div>
       <div class="tab" data-tab="pricing">Pricing</div>
       <div class="tab" data-tab="crm">CRM / Leads</div>
+      <div class="tab" data-tab="visitors">Visitors</div>
       <div class="tab" data-tab="logo">Logo</div>
     </div>
 
@@ -104,30 +105,25 @@
       <div class="row-actions"><button class="btn btn-orange" id="saveContent">Save changes</button><span id="contentMsg" class="msg"></span></div>
     </div>
 
-    <!-- PRICING -->
+    <!-- PRICING (CDMS rate card) -->
     <div class="card panel hidden" data-panel="pricing">
-      <h2>Quote rate card</h2>
-      <p class="sub">The chatbot uses these to give customers an estimated price. Estimate = max(min fare, (base + per-km×distance + size surcharge) × service multiplier).</p>
+      <h2>CDMS rate card</h2>
+      <p class="sub">The chatbot quotes from these. Price = (reference cost × zone × tier + weight surcharge) × (1 + margin) × (1 + fuel) + add-ons, then GST.</p>
       <div class="grid2">
         <div><label>Currency</label><input id="prCurrency"></div>
-        <div><label>Minimum fare</label><input id="prMin" type="number" step="0.5"></div>
-        <div><label>Base fare</label><input id="prBase" type="number" step="0.5"></div>
-        <div><label>Price per km</label><input id="prPerKm" type="number" step="0.1"></div>
+        <div><label>Reference direct cost</label><input id="prRef" type="number" step="0.05"></div>
+        <div><label>GST %</label><input id="prGst" type="number" step="0.5"></div>
+        <div><label>Fuel surcharge %</label><input id="prFuel" type="number" step="0.5"></div>
       </div>
-      <h2 style="margin-top:1.3rem">Size surcharge</h2>
-      <div class="grid2">
-        <div><label>Small</label><input id="prSizeS" type="number" step="0.5"></div>
-        <div><label>Medium</label><input id="prSizeM" type="number" step="0.5"></div>
-        <div><label>Large</label><input id="prSizeL" type="number" step="0.5"></div>
-      </div>
-      <h2 style="margin-top:1.3rem">Service multiplier</h2>
-      <div class="grid2">
-        <div><label>Same-day</label><input id="prSvcSameday" type="number" step="0.05"></div>
-        <div><label>Express</label><input id="prSvcExpress" type="number" step="0.05"></div>
-        <div><label>Scheduled</label><input id="prSvcScheduled" type="number" step="0.05"></div>
-        <div><label>Regional</label><input id="prSvcRegional" type="number" step="0.05"></div>
-      </div>
-      <div class="row-actions"><button class="btn btn-orange" id="savePricing">Save pricing</button><span id="pricingMsg" class="msg"></span></div>
+      <h2 style="margin-top:1.3rem">Service tiers</h2>
+      <div id="prTiers"></div>
+      <h2 style="margin-top:1.3rem">Delivery zones</h2>
+      <div id="prZones"></div>
+      <h2 style="margin-top:1.3rem">Weight brackets</h2>
+      <div id="prWeights"></div>
+      <h2 style="margin-top:1.3rem">Add-on surcharges</h2>
+      <div id="prSurcharges"></div>
+      <div class="row-actions"><button class="btn btn-orange" id="savePricing">Save rate card</button><span id="pricingMsg" class="msg"></span></div>
     </div>
 
     <!-- CRM -->
@@ -135,6 +131,15 @@
       <h2>Leads / CRM</h2>
       <p class="sub">Booking enquiries captured from the website chatbot. <button class="btn btn-ghost" id="refreshLeads" style="padding:.3rem .7rem">Refresh</button></p>
       <div id="leadsWrap"></div>
+    </div>
+
+    <!-- VISITORS / IP TRACKING -->
+    <div class="card panel hidden" data-panel="visitors">
+      <h2>Visitors / IP log</h2>
+      <p class="sub">Unique visitor IPs that loaded the site, with visit counts and last-seen time.
+        <button class="btn btn-ghost" id="refreshVisitors" style="padding:.3rem .7rem">Refresh</button>
+        <button class="btn btn-danger" id="clearVisitors" style="padding:.3rem .7rem">Clear log</button></p>
+      <div id="visitorsWrap"></div>
     </div>
 
     <!-- LOGO -->
@@ -176,6 +181,8 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
   document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== t.dataset.tab));
+  if (t.dataset.tab === 'visitors') loadVisitors();
+  if (t.dataset.tab === 'crm') loadLeads();
 }));
 
 // Content + SEO
@@ -187,19 +194,46 @@ async function loadContent() {
   $('heroSub').value=d.content.heroSubtitle||''; $('phone').value=d.content.phone||'';
   $('whatsapp').value=d.content.whatsapp||''; $('email').value=d.content.email||''; $('availability').value=d.content.availability||'';
   $('logoPreview').src = d.logoUrl || '/cms/logo-file?nope';
-  const p = d.pricing || {};
-  $('prCurrency').value=p.currency||'SGD'; $('prMin').value=p.minFare; $('prBase').value=p.baseFare; $('prPerKm').value=p.perKm;
-  $('prSizeS').value=p.sizeSurcharge?.small; $('prSizeM').value=p.sizeSurcharge?.medium; $('prSizeL').value=p.sizeSurcharge?.large;
-  $('prSvcSameday').value=p.serviceMultiplier?.sameday; $('prSvcExpress').value=p.serviceMultiplier?.express;
-  $('prSvcScheduled').value=p.serviceMultiplier?.scheduled; $('prSvcRegional').value=p.serviceMultiplier?.regional;
+  PRICING = d.pricing || {};
+  $('prCurrency').value = PRICING.currency || 'SGD'; $('prRef').value = PRICING.refCost; $('prGst').value = PRICING.gst; $('prFuel').value = PRICING.fuel;
+  renderPricing();
+}
+let PRICING = {};
+function ninp(val, step, attrs){ return `<input type="number" step="${step}" value="${val}" ${attrs} style="width:90px;text-align:right">`; }
+function renderPricing(){
+  $('prTiers').innerHTML = '<table><thead><tr><th>Tier</th><th>SLA</th><th>Cost ×</th><th>Margin %</th></tr></thead><tbody>' +
+    (PRICING.tiers||[]).map((t,i)=>`<tr><td><strong>${esc(t.name)}</strong></td><td class="lead-meta">${esc(t.sla)}</td>
+      <td>${ninp(t.cm,'0.05',`data-pr="tiers.${i}.cm"`)}</td><td>${ninp(Math.round(t.mg*100),'1',`data-pr="tiers.${i}.mgPct"`)}</td></tr>`).join('')+'</tbody></table>';
+  $('prZones').innerHTML = '<table><thead><tr><th>Zone</th><th>Up to km</th><th>Multiplier</th></tr></thead><tbody>' +
+    (PRICING.zones||[]).map((z,i)=>`<tr><td><strong>${esc(z.name)}</strong><div class="lead-meta">${esc(z.desc||'')}</div></td>
+      <td>${ninp(z.maxKm,'1',`data-pr="zones.${i}.maxKm"`)}</td><td>${ninp(z.m,'0.05',`data-pr="zones.${i}.m"`)}</td></tr>`).join('')+'</tbody></table>';
+  $('prWeights').innerHTML = '<table><thead><tr><th>Bracket</th><th>Up to kg</th><th>Surcharge $</th></tr></thead><tbody>' +
+    (PRICING.weights||[]).map((w,i)=>`<tr><td>${esc(w.name||('≤'+w.max+' kg'))}</td><td>${ninp(w.max,'0.5',`data-pr="weights.${i}.max"`)}</td><td>${ninp(w.s,'0.1',`data-pr="weights.${i}.s"`)}</td></tr>`).join('')+'</tbody></table>';
+  $('prSurcharges').innerHTML = '<table><thead><tr><th>Add-on</th><th>Type</th><th>Value</th></tr></thead><tbody>' +
+    (PRICING.surcharges||[]).map((s,i)=>`<tr><td>${esc(s.label)}</td><td class="lead-meta">${s.type==='pctNet'?'% of net':'flat $'}</td><td>${ninp(s.v,'0.5',`data-pr="surcharges.${i}.v"`)}</td></tr>`).join('')+'</tbody></table>';
 }
 $('savePricing').addEventListener('click', async () => {
-  const pricing = { currency:$('prCurrency').value, baseFare:+$('prBase').value, perKm:+$('prPerKm').value, minFare:+$('prMin').value,
-    sizeSurcharge:{ small:+$('prSizeS').value, medium:+$('prSizeM').value, large:+$('prSizeL').value },
-    serviceMultiplier:{ sameday:+$('prSvcSameday').value, express:+$('prSvcExpress').value, scheduled:+$('prSvcScheduled').value, regional:+$('prSvcRegional').value } };
-  const r = await api('/cms/content', { method:'PUT', body: JSON.stringify({ pricing }) });
-  const m=$('pricingMsg'); if(r.ok){ m.className='msg ok'; m.textContent='Pricing saved ✓'; } else { m.className='msg err'; m.textContent='Save failed'; }
+  PRICING.currency=$('prCurrency').value; PRICING.refCost=+$('prRef').value; PRICING.gst=+$('prGst').value; PRICING.fuel=+$('prFuel').value;
+  document.querySelectorAll('[data-pr]').forEach(el=>{
+    const [grp,idx,key]=el.dataset.pr.split('.'); const arr=PRICING[grp]; if(!arr||!arr[+idx]) return;
+    if(key==='mgPct') arr[+idx].mg=(+el.value)/100; else arr[+idx][key]=+el.value;
+  });
+  const r = await api('/cms/content', { method:'PUT', body: JSON.stringify({ pricing: PRICING }) });
+  const m=$('pricingMsg');
+  if(r.ok){ const d=await r.json(); PRICING=d.pricing; renderPricing(); m.className='msg ok'; m.textContent='Rate card saved ✓ (chatbot uses it within ~1 min)'; }
+  else { m.className='msg err'; m.textContent='Save failed'; }
 });
+
+// Visitors / IP log
+async function loadVisitors(){
+  const d = await api('/cms/visitors').then(r=>r.json()).catch(()=>({visitors:[],total:0}));
+  const rows = (d.visitors||[]).map(v=>`<tr><td><strong>${esc(v.ip)}</strong></td><td>${v.count}</td>
+    <td class="lead-meta">${new Date(v.last).toLocaleString()}</td><td class="lead-meta">${new Date(v.first).toLocaleDateString()}</td>
+    <td class="lead-meta" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.ua||'')}</td></tr>`).join('');
+  $('visitorsWrap').innerHTML = rows ? `<p class="sub">${d.total} unique IP(s).</p><div class="tablewrap" style="overflow-x:auto"><table><thead><tr><th>IP address</th><th>Visits</th><th>Last seen</th><th>First</th><th>User agent</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="sub">No visitors logged yet.</p>';
+}
+$('refreshVisitors').addEventListener('click', loadVisitors);
+$('clearVisitors').addEventListener('click', async () => { if(confirm('Clear the visitor IP log?')){ await api('/cms/visitors',{method:'DELETE'}); loadVisitors(); } });
 $('saveContent').addEventListener('click', async () => {
   const body = { seo:{ title:$('seoTitle').value, description:$('seoDesc').value },
     content:{ heroTitleTop:$('heroTop').value, heroTitleBottom:$('heroBottom').value, heroSubtitle:$('heroSub').value,
@@ -212,7 +246,7 @@ $('saveContent').addEventListener('click', async () => {
 async function loadLeads() {
   const d = await api('/cms/leads').then(r=>r.json()).catch(()=>({leads:[]}));
   const rows = (d.leads||[]).map(l => `<tr>
-    <td><span class="pill">${esc(l.source)}</span><div class="lead-meta">${new Date(l.createdAt).toLocaleString()}</div></td>
+    <td><span class="pill">${esc(l.source)}</span><div class="lead-meta">${new Date(l.createdAt).toLocaleString()}</div>${l.ip?'<div class="lead-meta">IP '+esc(l.ip)+'</div>':''}</td>
     <td><strong>${esc(l.service||'—')}</strong>${l.name?'<br>'+esc(l.name):''}${l.contact?'<br>'+esc(l.contact):''}</td>
     <td>${l.pickup?'↑ '+esc(l.pickup)+'<br>':''}${l.dropoff?'↓ '+esc(l.dropoff):''}${l.item?'<br>'+esc(l.item):''}${l.when?'<br>⏰ '+esc(l.when):''}${l.notes?'<br>'+esc(l.notes):''}</td>
     <td><button class="btn btn-danger" style="padding:.3rem .6rem" data-del="${l.id}">Delete</button></td></tr>`).join('');

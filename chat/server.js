@@ -26,10 +26,33 @@ async function recordLead(details) {
 
 const PRICING_URL = process.env.PRICING_URL || ""; // CMS rate card the bot quotes from
 
+// CDMS rate card defaults (fallback if the CMS is unreachable). The CMS is the source of truth.
 const DEFAULT_PRICING = {
-  currency: "SGD", baseFare: 8, perKm: 0.8, minFare: 10,
-  sizeSurcharge: { small: 0, medium: 3, large: 8 },
-  serviceMultiplier: { sameday: 1.0, express: 1.4, scheduled: 0.85, regional: 1.2 },
+  currency: "SGD", gst: 9, fuel: 6, refCost: 7.75,
+  zones: [
+    { k: 1, name: "Zone 1", maxKm: 5, m: 1.0 }, { k: 2, name: "Zone 2", maxKm: 12, m: 1.25 },
+    { k: 3, name: "Zone 3", maxKm: 20, m: 1.55 }, { k: 4, name: "Zone 4", maxKm: 9999, m: 1.9 },
+  ],
+  weights: [
+    { max: 3, s: 0 }, { max: 5, s: 1.2 }, { max: 10, s: 2.8 },
+    { max: 20, s: 5.5 }, { max: 30, s: 9 }, { max: 99999, s: 9, perKg: 0.4 },
+  ],
+  tiers: [
+    { k: "eco", name: "Economy", sla: "3–5 business days", cm: 0.8, mg: 0.25 },
+    { k: "std", name: "Standard", sla: "Next business day", cm: 1.0, mg: 0.35 },
+    { k: "exp", name: "Express", sla: "Same day · 4–6 h", cm: 1.45, mg: 0.45 },
+    { k: "sameday", name: "Same-Day Priority", sla: "Dedicated · ≤3 h", cm: 1.85, mg: 0.55 },
+    { k: "night", name: "Overnight", sla: "Eve → before 9 am", cm: 1.3, mg: 0.4 },
+    { k: "b2b", name: "B2B Contract", sla: "Volume contract", cm: 0.95, mg: 0.22 },
+  ],
+  surcharges: [
+    { k: "afterhours", label: "After-hours / weekend", type: "pctNet", v: 25 },
+    { k: "fragile", label: "Fragile / special handling", type: "flat", v: 6 },
+    { k: "cod", label: "Cash-on-delivery", type: "flat", v: 3.5 },
+    { k: "multistop", label: "Extra stop (multi-drop)", type: "flat", v: 4.5 },
+    { k: "pod", label: "Proof-of-delivery + photo", type: "flat", v: 1.5 },
+    { k: "redelivery", label: "Failed re-delivery", type: "flat", v: 8 },
+  ],
 };
 let pricingCache = { at: 0, data: DEFAULT_PRICING };
 async function getPricing() {
@@ -37,17 +60,43 @@ async function getPricing() {
   if (Date.now() - pricingCache.at < 60000) return pricingCache.data;
   try {
     const r = await fetch(PRICING_URL);
-    if (r.ok) { pricingCache = { at: Date.now(), data: await r.json() }; }
+    if (r.ok) { const d = await r.json(); if (d && d.tiers) pricingCache = { at: Date.now(), data: d }; }
   } catch (e) { /* keep last good / default */ }
   return pricingCache.data;
 }
-function computeQuote(p, service, distanceKm, size) {
-  const svc = Number(p.serviceMultiplier?.[service] ?? 1);
-  const sz = Number(p.sizeSurcharge?.[size] ?? 0);
+const round2 = (n) => Math.round(n * 100) / 100;
+function zoneForKm(p, km) {
+  const zs = [...p.zones].sort((a, b) => a.maxKm - b.maxKm);
+  return zs.find((z) => km <= z.maxKm) || zs[zs.length - 1];
+}
+function weightSurcharge(p, kg) {
+  const w = p.weights.find((x) => kg <= x.max) || p.weights[p.weights.length - 1];
+  let s = Number(w.s);
+  if (w.perKg && kg > 30) s += (kg - 30) * w.perKg;
+  return s;
+}
+// Exact CDMS formula: ((refCost × zone × tier) + weightSurcharge) × (1+margin) × (1+fuel) + add-ons, then GST.
+function computeQuote(p, tierKey, distanceKm, kg, surchargeKeys = []) {
+  const tier = p.tiers.find((t) => t.k === tierKey) || p.tiers.find((t) => t.k === "std") || p.tiers[0];
   const km = Math.max(0, Number(distanceKm) || 0);
-  let price = (Number(p.baseFare) + Number(p.perKm) * km + sz) * svc;
-  price = Math.max(Number(p.minFare) || 0, price);
-  return { currency: p.currency || "SGD", estimate: Math.round(price), low: Math.round(price * 0.9), high: Math.round(price * 1.15) };
+  const zone = zoneForKm(p, km);
+  const weight = Math.max(0.1, Number(kg) || 0.1);
+  const operational = Number(p.refCost) * zone.m * tier.cm;
+  const costToServe = operational + weightSurcharge(p, weight);
+  let net = costToServe * (1 + tier.mg);
+  net += net * (Number(p.fuel) / 100); // fuel surcharge
+  let addOn = 0;
+  const addLines = [];
+  for (const k of surchargeKeys || []) {
+    const sc = (p.surcharges || []).find((s) => s.k === k);
+    if (!sc) continue;
+    const amt = sc.type === "pctNet" ? net * (Number(sc.v) / 100) : Number(sc.v);
+    if (amt > 0) { addOn += amt; addLines.push(`${sc.label} ${p.currency} ${round2(amt)}`); }
+  }
+  const subtotal = net + addOn;
+  const gst = subtotal * (Number(p.gst) / 100);
+  const total = subtotal + gst;
+  return { currency: p.currency || "SGD", tier, zone, km, kg: weight, addLines, subtotal: round2(subtotal), gst: round2(gst), total: round2(total) };
 }
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -66,14 +115,17 @@ proof of delivery, available 24/7.
 Be concise, warm, and helpful. Answer in 1-3 short sentences or a tight bullet list. Only discuss Urban Werkz \
 Delivery and its services; if asked something unrelated, politely steer back.
 
-QUOTING A PRICE: You CAN give an estimated price using the calculate_quote tool — do not refuse or defer price \
-questions. To quote, you need three things: (1) the service type — one of sameday, express, scheduled, regional; \
-(2) the pickup and drop-off locations, from which YOU estimate the driving distance in km (you know Singapore \
-geography — give your best estimate, e.g. Toa Payoh to Ang Mo Kio ≈ 6 km); (3) the parcel size — small, medium, \
-or large. Ask only for what's missing, one or two questions at a time. Once you have all three, call \
-calculate_quote and then share the result as a range (e.g. "around SGD 14–18"), making clear it's an estimate \
-and the final price is confirmed by our team when the booking is placed. Never invent a price without calling \
-the tool.
+QUOTING A PRICE: You CAN give a price using the calculate_quote tool — do not refuse or defer price questions. \
+Quotes are GST-inclusive and computed from our rate card (distance zones, weight, service tier, add-ons). To \
+quote you need: (1) the service tier — Economy (3–5 days), Standard (next day), Express (same day 4–6h), \
+Same-Day Priority (dedicated ≤3h), Overnight, or B2B; if the customer just says "same day" pick Express, or \
+Same-Day Priority if they want a dedicated ≤3h trip; (2) pickup and drop-off — YOU estimate the driving \
+distance in km (you know Singapore: e.g. Toa Payoh to Ang Mo Kio ≈ 6 km), which sets the zone; (3) parcel \
+weight in kg (ask, or estimate — a small box ≈ 2 kg, docs ≈ 0.5 kg). Ask only for what's missing, 1–2 questions \
+at a time. Mention relevant add-ons if the customer raises them (after-hours/weekend, fragile, cash-on-delivery, \
+extra stop, proof-of-delivery photo). Then call calculate_quote and quote the EXACT total it returns (e.g. \
+"SGD 18.50, incl. GST"), with the service SLA. Add that re-weighing or zone changes at pickup may adjust the \
+final charge. Never invent a price without calling the tool.
 
 BOOKINGS: After quoting (or whenever the user wants to proceed), gather pickup, drop-off, item, and preferred \
 time (and their name if offered). When the user CONFIRMS, call create_whatsapp_booking with the details — this \
@@ -88,17 +140,19 @@ const TOOLS = [
   {
     name: "calculate_quote",
     description:
-      "Estimate a delivery price from the company rate card. Call this once you know the service type, an " +
-      "estimated driving distance in km between pickup and drop-off (you estimate it from the addresses), and " +
-      "the parcel size. Returns an estimated price range.",
+      "Calculate a GST-inclusive delivery price from the CDMS rate card. Call this once you know: the service " +
+      "tier; an estimated driving distance in km (you estimate it from the pickup/drop-off addresses — it maps " +
+      "to a delivery zone); the parcel weight in kg (ask, or estimate from the description); and any add-on " +
+      "surcharges the customer needs. Returns the exact price.",
     input_schema: {
       type: "object",
       properties: {
-        service: { type: "string", enum: ["sameday", "express", "scheduled", "regional"], description: "Service type" },
+        service: { type: "string", enum: ["eco", "std", "exp", "sameday", "night", "b2b"], description: "Service tier: eco=Economy 3-5d, std=Standard next-day, exp=Express same-day 4-6h, sameday=Same-Day Priority ≤3h, night=Overnight, b2b=B2B contract" },
         distance_km: { type: "number", description: "Estimated driving distance in km between pickup and drop-off" },
-        size: { type: "string", enum: ["small", "medium", "large"], description: "Parcel size" },
+        weight_kg: { type: "number", description: "Parcel weight in kg (estimate if unknown, e.g. small box ≈ 2)" },
+        surcharges: { type: "array", items: { type: "string", enum: ["afterhours", "fragile", "cod", "multistop", "pod", "redelivery"] }, description: "Optional add-ons that apply" },
       },
-      required: ["service", "distance_km", "size"],
+      required: ["service", "distance_km", "weight_kg"],
     },
   },
   {
@@ -204,18 +258,20 @@ app.post("/chat", async (req, res) => {
           if (block.name === "calculate_quote") {
             const p = await getPricing();
             const inp = block.input || {};
-            const q = computeQuote(p, inp.service, inp.distance_km, inp.size);
+            const q = computeQuote(p, inp.service, inp.distance_km, inp.weight_kg, inp.surcharges || []);
+            const adds = q.addLines.length ? ` Add-ons: ${q.addLines.join(", ")}.` : "";
             results.push({
               type: "tool_result",
               tool_use_id: block.id,
               content:
-                `Estimated price: ${q.currency} ${q.low}–${q.high} (typical ${q.currency} ${q.estimate}) for ` +
-                `${inp.service}, ~${inp.distance_km} km, ${inp.size} parcel. Share this as an ESTIMATE; the final ` +
-                `price is confirmed by the team when the booking is placed.`,
+                `Quote: ${q.currency} ${q.total} total (incl. ${p.gst}% GST). ${q.tier.name} (${q.tier.sla}), ` +
+                `${q.zone.name} (~${q.km} km), ${q.kg} kg.${adds} Subtotal ${q.currency} ${q.subtotal} + GST ` +
+                `${q.currency} ${q.gst}. Quote this exact total to the customer; note re-weighing or zone changes ` +
+                `at pickup may alter the final charge.`,
             });
           } else if (block.name === "create_whatsapp_booking") {
             whatsappUrl = buildBookingLink(block.input || {});
-            recordLead(block.input || {}); // record in the CRM (non-blocking)
+            recordLead({ ...(block.input || {}), ip }); // record in the CRM (non-blocking)
             results.push({
               type: "tool_result",
               tool_use_id: block.id,

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /cms/
+
+Sitemap: https://urbanfleetsg.com/sitemap.xml

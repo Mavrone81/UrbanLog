@@ -107,6 +107,29 @@ describe('link & asset integrity (parsed from index.html)', () => {
     expect(cmsJs).toMatch(/\/cms\/site/);
   });
 
+  it('has core SEO tags (canonical, OG, JSON-LD)', () => {
+    expect(html).toMatch(/<link rel="canonical" href="https:\/\/urbanfleetsg\.com\/">/);
+    expect(html).toMatch(/property="og:title"/);
+    expect(html).toMatch(/property="og:url" content="https:\/\/urbanfleetsg\.com\/"/);
+    expect(html).toMatch(/name="twitter:card"/);
+    expect(html).toMatch(/application\/ld\+json/);
+    expect(html).toMatch(/"@type": "LocalBusiness"/);
+    expect(html).toMatch(/<meta name="robots"/);
+  });
+
+  it('JSON-LD structured data is valid JSON', () => {
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    expect(m).toBeTruthy();
+    expect(() => JSON.parse(m[1])).not.toThrow();
+  });
+
+  it('ships robots.txt and sitemap.xml', () => {
+    expect(fs.existsSync(path.join(ROOT, 'robots.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'sitemap.xml'))).toBe(true);
+    expect(fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8')).toMatch(/Sitemap: https:\/\/urbanfleetsg\.com\/sitemap\.xml/);
+    expect(fs.readFileSync(path.join(ROOT, 'sitemap.xml'), 'utf8')).toMatch(/urbanfleetsg\.com/);
+  });
+
   it('references the favicon assets', () => {
     expect(html).toMatch(/rel="icon"[^>]*href="favicon\.png"/);
     expect(fs.existsSync(path.join(ROOT, 'favicon.png'))).toBe(true);
