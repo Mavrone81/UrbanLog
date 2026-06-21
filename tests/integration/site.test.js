@@ -117,10 +117,18 @@ describe('link & asset integrity (parsed from index.html)', () => {
     expect(html).toMatch(/<meta name="robots"/);
   });
 
-  it('JSON-LD structured data is valid JSON', () => {
-    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
-    expect(m).toBeTruthy();
-    expect(() => JSON.parse(m[1])).not.toThrow();
+  it('every JSON-LD block is valid JSON and includes LocalBusiness + FAQPage', () => {
+    const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    const types = blocks.map((b) => { expect(() => JSON.parse(b)).not.toThrow(); return JSON.parse(b)["@type"]; });
+    expect(types).toContain("LocalBusiness");
+    expect(types).toContain("FAQPage");
+  });
+
+  it('has an on-page FAQ section and en-SG locale', () => {
+    expect(html).toMatch(/<html lang="en-SG">/);
+    expect(html).toMatch(/class="faq-item"/);
+    expect((html.match(/<details class="faq-item">/g) || []).length).toBeGreaterThanOrEqual(5);
   });
 
   it('ships robots.txt and sitemap.xml', () => {

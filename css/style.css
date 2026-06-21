@@ -779,3 +779,46 @@ body {
 .chat-cta i { font-size: 1.2rem; }
 .chat-cta.pdf { background: #0d2740; box-shadow: 0 4px 12px rgba(13, 39, 64, 0.3); }
 .chat-cta.pdf:hover { background: #081a2c; }
+
+/* FAQ Section (SEO) */
+.faq { padding: 5rem 0; }
+.faq-list {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+.faq-item {
+    background: var(--white);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 0.75rem;
+    padding: 0 1.25rem;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+}
+.faq-item summary {
+    list-style: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-dark);
+    padding: 1.1rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+    content: "+";
+    font-size: 1.4rem;
+    color: var(--orange);
+    transition: var(--transition);
+    line-height: 1;
+}
+.faq-item[open] summary::after { transform: rotate(45deg); }
+.faq-item p {
+    color: var(--text-muted);
+    padding: 0 0 1.2rem;
+    margin: 0;
+    line-height: 1.7;
+}

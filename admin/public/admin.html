@@ -225,12 +225,26 @@ $('savePricing').addEventListener('click', async () => {
 });
 
 // Visitors / IP log
+function geoText(g){
+  if(!g||!g.status||g.status==='pending') return 'Looking up…';
+  if(g.status==='private') return 'Local / private';
+  if(g.status==='failed') return '—';
+  const parts=[g.city,g.region,g.country].filter(Boolean).join(', ');
+  return (parts||'—')+(g.zip?(' '+g.zip):'');
+}
+function geoMap(g){ return (g&&g.lat!=null)?` <a href="https://www.google.com/maps?q=${g.lat},${g.lon}" target="_blank" rel="noopener">map</a>`:''; }
 async function loadVisitors(){
   const d = await api('/cms/visitors').then(r=>r.json()).catch(()=>({visitors:[],total:0}));
-  const rows = (d.visitors||[]).map(v=>`<tr><td><strong>${esc(v.ip)}</strong></td><td>${v.count}</td>
-    <td class="lead-meta">${new Date(v.last).toLocaleString()}</td><td class="lead-meta">${new Date(v.first).toLocaleDateString()}</td>
-    <td class="lead-meta" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.ua||'')}</td></tr>`).join('');
-  $('visitorsWrap').innerHTML = rows ? `<p class="sub">${d.total} unique IP(s).</p><div class="tablewrap" style="overflow-x:auto"><table><thead><tr><th>IP address</th><th>Visits</th><th>Last seen</th><th>First</th><th>User agent</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="sub">No visitors logged yet.</p>';
+  const list = d.visitors||[];
+  const rows = list.map(v=>`<tr><td><strong>${esc(v.ip)}</strong></td>
+    <td>${esc(geoText(v.geo))}${geoMap(v.geo)}</td>
+    <td class="lead-meta" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((v.geo&&v.geo.isp)||'')}</td>
+    <td>${v.count}</td>
+    <td class="lead-meta">${new Date(v.last).toLocaleString()}</td>
+    <td class="lead-meta" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.ua||'')}</td></tr>`).join('');
+  $('visitorsWrap').innerHTML = rows ? `<p class="sub">${d.total} unique IP(s).</p><div class="tablewrap" style="overflow-x:auto"><table><thead><tr><th>IP address</th><th>Location</th><th>ISP</th><th>Visits</th><th>Last seen</th><th>User agent</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="sub">No visitors logged yet.</p>';
+  // Geo is resolved async server-side — refresh once if any lookups are still pending.
+  if (list.some(v=>!v.geo||v.geo.status==='pending')) setTimeout(loadVisitors, 3000);
 }
 $('refreshVisitors').addEventListener('click', loadVisitors);
 $('clearVisitors').addEventListener('click', async () => { if(confirm('Clear the visitor IP log?')){ await api('/cms/visitors',{method:'DELETE'}); loadVisitors(); } });

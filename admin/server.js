@@ -110,6 +110,38 @@ setInterval(() => { if (visitorsDirty) { visitorsDirty = false; saveDB(); } }, 1
 function clientIp(req) {
   return (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
 }
+
+// ---- IP geolocation (city-level, approximate) ----
+function isPrivateIp(ip) {
+  if (!ip || ip === "unknown") return true;
+  if (ip === "::1" || ip.startsWith("fe80") || ip.startsWith("fc") || ip.startsWith("fd")) return true;
+  if (ip.startsWith("127.") || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("169.254.")) return true;
+  const m = ip.match(/^172\.(\d+)\./);
+  if (m && +m[1] >= 16 && +m[1] <= 31) return true;
+  return false;
+}
+async function geoLookup(ip) {
+  // ip-api.com free endpoint (HTTP, non-commercial, ~45 req/min). Swap to a paid provider for commercial/HTTPS use.
+  const url = `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,zip,lat,lon,isp`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+  const d = await r.json();
+  if (d.status !== "success") return { status: "failed" };
+  return { status: "done", country: d.country, countryCode: d.countryCode, region: d.regionName, city: d.city, zip: d.zip, lat: d.lat, lon: d.lon, isp: d.isp };
+}
+const geoInFlight = new Set();
+function maybeGeolocate(ip) {
+  const v = db.visitors[ip];
+  if (!v) return;
+  if (v.geo && (v.geo.status === "done" || v.geo.status === "private")) return; // resolved; allow retry on "failed"
+  if (isPrivateIp(ip)) { v.geo = { status: "private" }; visitorsDirty = true; return; }
+  if (geoInFlight.has(ip) || geoInFlight.size >= 5) return; // dedupe + simple rate guard
+  geoInFlight.add(ip);
+  v.geo = { status: "pending" };
+  geoLookup(ip)
+    .then((g) => { if (db.visitors[ip]) db.visitors[ip].geo = g; })
+    .catch(() => { if (db.visitors[ip]) db.visitors[ip].geo = { status: "failed" }; })
+    .finally(() => { geoInFlight.delete(ip); visitorsDirty = true; });
+}
 function recordVisit(req) {
   const ip = clientIp(req);
   const now = new Date().toISOString();
@@ -124,6 +156,7 @@ function recordVisit(req) {
     keys.sort((a, b) => (db.visitors[a].last < db.visitors[b].last ? -1 : 1));
     for (let i = 0; i < keys.length - 5000; i++) delete db.visitors[keys[i]];
   }
+  maybeGeolocate(ip); // async, fire-and-forget — never blocks the page load
   visitorsDirty = true;
 }
 

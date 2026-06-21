@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-SG">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,6 +19,7 @@
     <meta property="og:description" content="Tech-powered last-mile logistics in Singapore. Same-day delivery, real-time GPS tracking, instant quotes.">
     <meta property="og:url" content="https://urbanfleetsg.com/">
     <meta property="og:image" content="https://urbanfleetsg.com/apple-touch-icon.png">
+    <meta property="og:image:alt" content="Urban Werkz Delivery — same-day courier in Singapore">
     <meta property="og:locale" content="en_SG">
 
     <!-- Twitter -->
@@ -51,7 +52,38 @@
         "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
         "opens": "00:00", "closes": "23:59"
       },
+      "knowsAbout": ["same-day delivery","express courier","last-mile logistics","parcel delivery","scheduled delivery","regional delivery"],
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Delivery services",
+        "itemListElement": [
+          { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Same-day & express delivery", "areaServed": "Singapore" } },
+          { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Scheduled & recurring delivery", "areaServed": "Singapore" } },
+          { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Dedicated business fleet", "areaServed": "Singapore" } },
+          { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Regional delivery (up to ~200km)", "areaServed": "Singapore" } }
+        ]
+      },
       "sameAs": ["https://wa.me/6589968390"]
+    }
+    </script>
+
+    <!-- FAQ structured data (rich results) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Do you offer same-day delivery in Singapore?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Urban Werkz Delivery offers same-day and express courier delivery across Singapore, with real-time GPS tracking and digital proof of delivery. Same-day priority can deliver in as little as 3 hours." } },
+        { "@type": "Question", "name": "How much does courier delivery cost in Singapore?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Pricing is based on service tier, distance zone, and parcel weight, inclusive of GST. You can get an exact, instant quote from our website chatbot or on WhatsApp at +65 8996 8390." } },
+        { "@type": "Question", "name": "What areas do you deliver to?",
+          "acceptedAnswer": { "@type": "Answer", "text": "We deliver island-wide across Singapore, and offer regional delivery up to about 200km." } },
+        { "@type": "Question", "name": "Can I track my delivery in real time?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes — every delivery includes live GPS tracking, ETA updates, delivery photos, and digital signature proof of delivery." } },
+        { "@type": "Question", "name": "How do I book a delivery or get a quote?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Use the chatbot on this site for an instant quote and booking, or message us on WhatsApp at +65 8996 8390. We are available 24/7 for urgent deliveries." } }
+      ]
     }
     </script>
     
@@ -61,7 +93,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css">
@@ -290,9 +323,39 @@
             </div>
         </section>
         
+        <!-- FAQ Section (SEO) -->
+        <section class="faq bg-light">
+            <div class="container target-observe">
+                <h2 class="section-title text-center">Singapore Delivery — Frequently Asked Questions</h2>
+                <p class="section-subtitle text-center">Same-day courier service, pricing, tracking and coverage across Singapore</p>
+                <div class="faq-list">
+                    <details class="faq-item">
+                        <summary>Do you offer same-day delivery in Singapore?</summary>
+                        <p>Yes. Urban Werkz Delivery offers same-day and express courier delivery across Singapore, with real-time GPS tracking and digital proof of delivery. Same-day priority can deliver in as little as 3 hours.</p>
+                    </details>
+                    <details class="faq-item">
+                        <summary>How much does courier delivery cost in Singapore?</summary>
+                        <p>Pricing is based on service tier, distance zone, and parcel weight, inclusive of GST. Get an exact, instant quote from our website chatbot or on WhatsApp at +65 8996 8390 — and download a PDF quotation.</p>
+                    </details>
+                    <details class="faq-item">
+                        <summary>What areas do you deliver to?</summary>
+                        <p>We deliver island-wide across Singapore, and offer regional delivery up to about 200&nbsp;km for cross-border and outlying locations.</p>
+                    </details>
+                    <details class="faq-item">
+                        <summary>Can I track my delivery in real time?</summary>
+                        <p>Yes — every delivery includes live GPS tracking, ETA updates, delivery photos, and digital signature proof of delivery, so you always know where your parcel is.</p>
+                    </details>
+                    <details class="faq-item">
+                        <summary>How do I book a delivery or get a quote?</summary>
+                        <p>Use the chatbot on this site for an instant quote and booking, or message us on WhatsApp at +65 8996 8390. We are available 24/7 for urgent deliveries.</p>
+                    </details>
+                </div>
+            </div>
+        </section>
+
         <footer class="footer bg-dark">
             <div class="container text-center">
-                <p>&copy; 2026 Urban Werkz Delivery. All rights reserved.</p>
+                <p>&copy; 2026 Urban Werkz Delivery (UrbanFleet SG) — same-day courier &amp; delivery in Singapore. All rights reserved.</p>
             </div>
         </footer>
     </main>
