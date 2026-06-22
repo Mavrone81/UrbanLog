@@ -462,4 +462,65 @@ app.get("/quote/:file", (req, res) => {
   doc.end();
 });
 
+// Daily AI SEO refresh: generate optimized SEO + FAQ from current context, push to the CMS.
+const SEO_REFRESH_KEY = process.env.SEO_REFRESH_KEY || "";
+const ADMIN_SEO_URL = process.env.ADMIN_SEO_URL || "http://admin:3000/cms/seo-refresh";
+const SEO_TOOL = [{
+  name: "publish_seo",
+  description: "Publish the optimized SEO metadata and FAQ for the homepage.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "SEO <title>, <=60 chars ideally, includes 'Singapore' and the primary keyword. Must start with 'Urban Werkz Delivery'." },
+      description: { type: "string", description: "Meta description, 140-160 chars, compelling, includes primary keywords and a call to action." },
+      keywords: { type: "string", description: "8-12 comma-separated Singapore courier/delivery keywords and long-tail phrases." },
+      faq: {
+        type: "array",
+        description: "5-6 FAQ entries targeting real Singapore search queries about courier/delivery.",
+        items: { type: "object", properties: { q: { type: "string" }, a: { type: "string", description: "2-3 sentence answer, keyword-rich, accurate to the business." } }, required: ["q", "a"] },
+      },
+    },
+    required: ["title", "description", "keywords", "faq"],
+  },
+}];
+
+app.post("/seo-refresh", async (req, res) => {
+  if (!SEO_REFRESH_KEY || req.headers["x-seo-key"] !== SEO_REFRESH_KEY) return res.status(401).json({ error: "unauthorized" });
+  try {
+    const p = await getPricing().catch(() => null);
+    const tiers = p?.tiers ? p.tiers.map((t) => t.name).join(", ") : "Economy, Standard, Express, Same-Day Priority, Overnight, B2B";
+    const context =
+      `Business: Urban Werkz Delivery (also "UrbanFleet SG"), a tech-powered same-day & express last-mile courier in ` +
+      `Singapore — website urbanfleetsg.com. Services: same-day/express delivery, scheduled & recurring delivery, ` +
+      `dedicated business fleet, regional delivery up to ~200km. Features: real-time GPS tracking, ETA updates, ` +
+      `delivery photos, digital proof of delivery, 24/7 availability, instant quotes + PDF. Service tiers: ${tiers}. ` +
+      `Contact: WhatsApp/phone +65 8996 8390, email Urbanfleet@gmail.com.`;
+    const r = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1500,
+      system:
+        "You are an SEO specialist optimizing a Singapore courier/delivery homepage for Google. Produce accurate, " +
+        "non-spammy, stable SEO that targets high-intent local queries (same-day delivery Singapore, courier Singapore, " +
+        "parcel/express delivery, etc.). Keep the brand name. Never invent services, prices, or guarantees not in the context.",
+      tools: SEO_TOOL,
+      tool_choice: { type: "tool", name: "publish_seo" },
+      messages: [{ role: "user", content: `Generate optimized homepage SEO + FAQ from this context:\n\n${context}` }],
+    });
+    const block = r.content.find((b) => b.type === "tool_use" && b.name === "publish_seo");
+    if (!block) return res.status(502).json({ error: "no SEO generated" });
+    const seo = block.input;
+    const push = await fetch(ADMIN_SEO_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-seo-key": SEO_REFRESH_KEY },
+      body: JSON.stringify(seo),
+    });
+    const pushed = await push.json().catch(() => ({}));
+    console.log(`[${new Date().toISOString()}] seo-refresh: "${seo.title}" faq=${seo.faq?.length} -> admin ${push.status}`);
+    res.json({ ok: push.ok, title: seo.title, keywords: seo.keywords, faqCount: seo.faq?.length, admin: pushed });
+  } catch (e) {
+    console.error("seo-refresh failed:", e?.message);
+    res.status(500).json({ error: e?.message || "seo-refresh failed" });
+  }
+});
+
 app.listen(PORT, () => console.log(`urbanlog-chat listening on :${PORT} (model: ${MODEL})`));

@@ -11,6 +11,36 @@
         document.querySelectorAll('[data-cms="' + key + '"]').forEach((el) => { el.textContent = val; });
     }
 
+    // Replace the on-page FAQ + its FAQPage structured data with CMS-managed entries.
+    function renderFaq(faq) {
+        const list = document.querySelector('.faq-list');
+        if (list) {
+            list.innerHTML = '';
+            faq.forEach((item) => {
+                if (!item || !item.q || !item.a) return;
+                const det = document.createElement('details');
+                det.className = 'faq-item';
+                const sum = document.createElement('summary');
+                sum.textContent = item.q;
+                const p = document.createElement('p');
+                p.textContent = item.a;
+                det.appendChild(sum);
+                det.appendChild(p);
+                list.appendChild(det);
+            });
+        }
+        const ld = {
+            '@context': 'https://schema.org', '@type': 'FAQPage',
+            mainEntity: faq.filter((f) => f && f.q && f.a).map((f) => ({
+                '@type': 'Question', name: f.q,
+                acceptedAnswer: { '@type': 'Answer', text: f.a },
+            })),
+        };
+        let s = [...document.querySelectorAll('script[type="application/ld+json"]')].find((x) => x.textContent.includes('FAQPage'));
+        if (!s) { s = document.createElement('script'); s.type = 'application/ld+json'; document.head.appendChild(s); }
+        s.textContent = JSON.stringify(ld);
+    }
+
     function apply(d) {
         if (!d) return;
         const c = d.content || {};
@@ -21,6 +51,11 @@
             const m = document.querySelector('meta[name="description"]');
             if (m) m.setAttribute('content', seo.description);
         }
+        if (seo.keywords) {
+            const k = document.querySelector('meta[name="keywords"]');
+            if (k) k.setAttribute('content', seo.keywords);
+        }
+        if (Array.isArray(d.faq) && d.faq.length) renderFaq(d.faq);
 
         setText('heroTitleTop', c.heroTitleTop);
         setText('heroTitleBottom', c.heroTitleBottom);

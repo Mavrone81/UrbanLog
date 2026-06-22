@@ -94,7 +94,15 @@ const DEFAULTS = {
   seo: {
     title: "Urban Werkz Delivery | Same-Day Courier & Tracked Delivery in Singapore",
     description: "Urban Werkz Delivery (UrbanFleet SG) — tech-powered last-mile courier in Singapore. Same-day & express delivery, real-time GPS tracking, instant quotes. Get a quote on WhatsApp.",
+    keywords: "delivery Singapore, same-day delivery Singapore, courier Singapore, last-mile delivery, parcel delivery, express courier, dispatch, UrbanFleet",
   },
+  faq: [
+    { q: "Do you offer same-day delivery in Singapore?", a: "Yes. Urban Werkz Delivery offers same-day and express courier delivery across Singapore, with real-time GPS tracking and digital proof of delivery. Same-day priority can deliver in as little as 3 hours." },
+    { q: "How much does courier delivery cost in Singapore?", a: "Pricing is based on service tier, distance zone, and parcel weight, inclusive of GST. Get an exact, instant quote from our website chatbot or on WhatsApp at +65 8996 8390 — and download a PDF quotation." },
+    { q: "What areas do you deliver to?", a: "We deliver island-wide across Singapore, and offer regional delivery up to about 200 km for cross-border and outlying locations." },
+    { q: "Can I track my delivery in real time?", a: "Yes — every delivery includes live GPS tracking, ETA updates, delivery photos, and digital signature proof of delivery." },
+    { q: "How do I book a delivery or get a quote?", a: "Use the chatbot on this site for an instant quote and booking, or message us on WhatsApp at +65 8996 8390. We are available 24/7 for urgent deliveries." },
+  ],
   content: {
     heroTitleTop: "Fast, Tracked Deliveries",
     heroTitleBottom: "Across the City",
@@ -119,6 +127,7 @@ function loadDB() {
       content: { ...DEFAULTS.content, ...p.content },
       logo: { ...DEFAULTS.logo, ...p.logo },
       pricing: p.pricing && p.pricing.tiers ? p.pricing : DEFAULT_PRICING,
+      faq: Array.isArray(p.faq) && p.faq.length ? p.faq : DEFAULTS.faq,
       leads: p.leads || [],
       visitors: p.visitors || {},
     };
@@ -233,8 +242,26 @@ app.get("/cms/site", (req, res) => {
   res.json({
     seo: db.seo,
     content: db.content,
+    faq: db.faq,
     logoUrl: db.logo.faviconFile ? `/cms/logo-file?v=${encodeURIComponent(db.logo.faviconFile)}` : null,
   });
+});
+
+// Secured endpoint for the daily AI SEO refresh (called by the chat service with a shared key).
+const SEO_REFRESH_KEY = process.env.SEO_REFRESH_KEY || "";
+app.post("/cms/seo-refresh", (req, res) => {
+  if (!SEO_REFRESH_KEY || req.headers["x-seo-key"] !== SEO_REFRESH_KEY) return res.status(401).json({ error: "unauthorized" });
+  const b = req.body || {};
+  if (typeof b.title === "string" && b.title.trim()) db.seo.title = b.title.trim().slice(0, 180);
+  if (typeof b.description === "string" && b.description.trim()) db.seo.description = b.description.trim().slice(0, 320);
+  if (typeof b.keywords === "string" && b.keywords.trim()) db.seo.keywords = b.keywords.trim().slice(0, 400);
+  if (Array.isArray(b.faq) && b.faq.length) {
+    db.faq = b.faq.slice(0, 10)
+      .filter((x) => x && typeof x.q === "string" && typeof x.a === "string" && x.q.trim() && x.a.trim())
+      .map((x) => ({ q: x.q.trim().slice(0, 200), a: x.a.trim().slice(0, 600) }));
+  }
+  saveDB();
+  res.json({ ok: true, title: db.seo.title, faqCount: db.faq.length });
 });
 app.get("/cms/pricing", async (_req, res) => {
   // CDMS is the source of truth; fall back to the local cache on any failure.
